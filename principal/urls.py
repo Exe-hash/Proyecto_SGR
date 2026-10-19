@@ -1,3 +1,4 @@
+from django.contrib.auth.views import LogoutView
 from django.urls import path
 
 from . import views
@@ -12,4 +13,5 @@ urlpatterns = [
     path("evidencias/", views.evidencias, name="evidencias"),
     path("equipo/", views.equipo, name="equipo"),
     path("verificacion/", views.verificacion, name="verificacion"),
+    path("cerrar-sesion/", LogoutView.as_view(next_page="principal:inicio"), name="cerrar_sesion"),
 ]

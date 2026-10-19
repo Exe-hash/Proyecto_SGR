@@ -25,7 +25,15 @@
       <a href="{% url 'principal:actividades' %}" class="nav-link {% if pagina == 'actividades' %}active{% endif %}" {% if pagina == 'actividades' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-edit"/></svg><span>Registrar Actividades</span></a>
       <a href="{% url 'principal:agenda' %}" class="nav-link {% if pagina == 'agenda' %}active{% endif %}" {% if pagina == 'agenda' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-calendar"/></svg><span>Agenda Colectiva</span></a>
       <a href="{% url 'principal:evidencias' %}" class="nav-link {% if pagina == 'evidencias' %}active{% endif %}" {% if pagina == 'evidencias' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-file"/></svg><span>Mis Evidencias</span></a>
-      {% endif %}
+            {% endif %}
+
+      <form method="post" action="{% url 'principal:cerrar_sesion' %}">
+        {% csrf_token %}
+        <button class="button secondary" type="submit">
+          Cerrar sesión
+        </button>
+      </form>
+
     </nav>
     <div class="sidebar-foot"><span>SGR · Vista de demostración</span><a href="{% url 'principal:inicio' %}">Cambiar vista</a></div>
   </aside>
