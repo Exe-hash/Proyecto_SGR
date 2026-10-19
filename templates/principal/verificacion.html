@@ -1,0 +1,11 @@
+{% extends 'principal/base.html' %}{% block title %}Verificación de actividades{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Revisión de Evidencias Pendientes</h1><p>Evalúa las evidencias enviadas para aprobar, rechazar o solicitar correcciones</p></div>
+<section class="review-layout"><div class="review-inbox"><h2>Bandeja de Pendientes (5)</h2><label class="search"><svg class="icon"><use href="#icon-search"/></svg><span class="sr-only">Buscar evidencia pendiente</span><input type="search" placeholder="Buscar …" data-filter-input="revision"></label><div class="review-tabs"><button type="button" class="button outline active" data-demo-pending>Nuevas (5)</button><button type="button" class="button outline" data-demo-pending>Corregidas</button></div>
+  {% for e in evidencias %}<button type="button" class="review-item {% if forloop.first %}selected{% endif %}" data-filter-item="revision" data-review-item data-code="{{ e.codigo }}" data-title="{{ e.titulo }}" data-date="{{ e.fecha }}"><strong>{{ e.codigo }} – {{ e.titulo }}</strong><span><span class="avatar">AM</span> Andrea Muñoz<br> en {{ e.fecha }}</span></button>{% endfor %}
+  </div><div class="review-detail"><h2>Evidencia Seleccionada</h2><h3>Actividad: <span id="review-title">Poda y retiro de ramas en sector Uruguay</span></h3><div class="review-meta"><span>Funcionario: Andrea Muñoz (Territorial OO.CC)</span><span>Fecha: <span id="review-date">17/10/2026</span></span><span>Código: <span id="review-code">COM1762</span></span></div>
+  <div class="evidence-placeholder" role="img" aria-label="Espacio de visualización de una fotografía de evidencia"><svg class="icon"><use href="#icon-image"/></svg><span>Vista previa de la evidencia</span><small>La fotografía se mostrará al conectar el almacenamiento.</small></div>
+  <p>¿La evidencia cumple con el requerimiento y acredita la actividad realizada?</p><label for="review-comment">Observación</label><textarea id="review-comment" placeholder="Escribe una observación o justificación …"></textarea><div class="review-actions"><button type="button" class="button primary" data-demo-pending>Rechazar</button><button type="button" class="button warning" data-demo-pending>Solicitar Corrección</button><button type="button" class="button success" data-demo-pending>Aprobar Evidencia</button></div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends 'principal/base.html' %}{% block title %}Resumen de equipo{% endblock %}
+{% block content %}
+<h1 class="sr-only">Resumen de equipo</h1><section class="summary-grid team-summary" aria-label="Indicadores del equipo">
+  <article class="card summary-card"><h2>Actividades Diarias</h2><div class="gauge" aria-label="61 por ciento completado"><div class="gauge-arc" style="--gauge:61%"></div><div class="gauge-value">61%</div></div><p class="center">Completado</p></article>
+  <article class="card summary-card"><h2>Avance Global del Equipo</h2><strong class="big-number">78,5%</strong><p class="team-delta"><strong>+18,5%</strong> vs meta 60%</p></article>
+  <article class="card summary-card"><h2>Actividades Registradas</h2><div class="activity-totals"><span><strong>1346</strong> Totales</span><span>29 Diarias</span></div></article>
+</section>
+<section class="card team-list"><div class="heading-row"><h2>Estado y Desempeño del Equipo <span class="quiet">(18 oct 2026)</span></h2><div class="heading-actions"><label class="search"><svg class="icon"><use href="#icon-search"/></svg><span class="sr-only">Buscar en equipo</span><input type="search" placeholder="Buscar …" data-filter-input="equipo"></label><button type="button" class="button primary" data-demo-pending><svg class="icon"><use href="#icon-download"/></svg> Exportar Informe</button></div></div>
+  {% for p in equipo %}<article class="team-row" data-filter-item="equipo"><span class="avatar">{{ p.iniciales }}</span><div class="team-name"><strong>{{ p.nombre }}</strong><small>({{ p.cargo }})</small></div><span class="status-pill {{ p.clase }}"><i></i>{{ p.estado }}</span><div class="team-progress"><div><span>{{ p.porcentaje }}%</span><span>/60%</span></div><span class="mini-progress {{ p.clase }}"><i style="width:{{ p.barra }}%"></i></span></div><span class="last-activity">Última Actividad: Ayer, 15:30</span><button type="button" class="button outline" data-demo-pending>Ver Análisis <svg class="icon"><use href="#icon-arrow"/></svg></button></article>{% endfor %}
+</section>
+{% endblock %}
