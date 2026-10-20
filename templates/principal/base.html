@@ -1,49 +1,147 @@
-{% load static %}<!doctype html>
+{% load static %}
+<!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}SGR{% endblock %} | Sistema de Gestión de Resultados</title><link rel="stylesheet" href="{% static 'css/estilos.css' %}"><script src="{% static 'js/principal.js' %}" defer></script></head>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SGR{% endblock %} | Sistema de Gestión de Resultados</title>
+  <link rel="stylesheet" href="{% static 'css/estilos.css' %}">
+  <script src="{% static 'js/principal.js' %}" defer></script>
+</head>
+
 <body class="app-page">
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <symbol id="icon-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21h-7v-7h-4v7H3z"/></symbol>
-    <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m3 3 12 3 6 6-9 9-6-6L3 3Zm4 4 7 7M14 14l-2 2"/><circle cx="10" cy="10" r="1"/></symbol>
-    <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v5m10-5v5M3 10h18"/></symbol>
-    <symbol id="icon-file" viewBox="0 0 24 24"><path d="M5 2h9l5 5v15H5zM14 2v6h5"/></symbol>
-    <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 21v-2c0-4 3.5-6 8-6s8 2 8 6v2z"/></symbol>
-    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
-    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
-    <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-7-7 7 7-7 7"/></symbol>
-    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></symbol>
-    <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m4 18 6-6 3 3 3-3 4 5"/></symbol>
+    <symbol id="icon-home" viewBox="0 0 24 24">
+      <path d="M3 10.5 12 3l9 7.5V21h-7v-7h-4v7H3z" />
+    </symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24">
+      <path d="m3 3 12 3 6 6-9 9-6-6L3 3Zm4 4 7 7M14 14l-2 2" />
+      <circle cx="10" cy="10" r="1" />
+    </symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M7 3v5m10-5v5M3 10h18" />
+    </symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24">
+      <path d="M5 2h9l5 5v15H5zM14 2v6h5" />
+    </symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24">
+      <circle cx="12" cy="7" r="4" />
+      <path d="M4 21v-2c0-4 3.5-6 8-6s8 2 8 6v2z" />
+    </symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m16 16 5 5" />
+    </symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </symbol>
+    <symbol id="icon-arrow" viewBox="0 0 24 24">
+      <path d="M4 12h16m-7-7 7 7-7 7" />
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24">
+      <path d="M12 3v12m-5-5 5 5 5-5M4 20h16" />
+    </symbol>
+    <symbol id="icon-image" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8" cy="8" r="1.5" />
+      <path d="m4 18 6-6 3 3 3-3 4 5" />
+    </symbol>
   </svg>
   <aside class="sidebar" aria-label="Navegación principal">
-    <a class="brand" href="{% url 'principal:inicio' %}" aria-label="SGR - pantalla de inicio">{% include 'principal/componentes/marca.html' %}</a>
+    <div class="brand" aria-hidden="true"></div>
     <nav class="sidebar-nav">
-      {% if supervision %}
-      <a href="{% url 'principal:equipo' %}" class="nav-link {% if pagina == 'equipo' %}active{% endif %}" {% if pagina == 'equipo' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-user"/></svg><span>Resumen de equipo</span></a>
-      <a href="{% url 'principal:verificacion' %}" class="nav-link {% if pagina == 'verificacion' %}active{% endif %}" {% if pagina == 'verificacion' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-file"/></svg><span>Verificación de actividades</span></a>
-      {% else %}
-      <a href="{% url 'principal:panel' %}" class="nav-link {% if pagina == 'panel' %}active{% endif %}" {% if pagina == 'panel' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-home"/></svg><span>Mi Panel</span></a>
-      <a href="{% url 'principal:actividades' %}" class="nav-link {% if pagina == 'actividades' %}active{% endif %}" {% if pagina == 'actividades' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-edit"/></svg><span>Registrar Actividades</span></a>
-      <a href="{% url 'principal:agenda' %}" class="nav-link {% if pagina == 'agenda' %}active{% endif %}" {% if pagina == 'agenda' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-calendar"/></svg><span>Agenda Colectiva</span></a>
-      <a href="{% url 'principal:evidencias' %}" class="nav-link {% if pagina == 'evidencias' %}active{% endif %}" {% if pagina == 'evidencias' %}aria-current="page"{% endif %}><svg class="icon"><use href="#icon-file"/></svg><span>Mis Evidencias</span></a>
-            {% endif %}
+      <a href="{% url 'principal:panel' %}" class="nav-link {% if pagina == 'panel' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-home"></use>
+        </svg>
+        Mi Panel
+      </a>
+
+      {% if puede_registrar_actividades %}
+      <a href="{% url 'principal:actividades' %}" class="nav-link {% if pagina == 'actividades' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-edit"></use>
+        </svg>
+        Registrar Actividades
+      </a>
+      {% endif %}
+
+      {% if puede_ver_agenda %}
+      <a href="{% url 'principal:agenda' %}" class="nav-link {% if pagina == 'agenda' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-calendar"></use>
+        </svg>
+        Agenda Colectiva
+      </a>
+      {% endif %}
+
+      {% if puede_registrar_actividades %}
+      <a href="{% url 'principal:evidencias' %}" class="nav-link {% if pagina == 'evidencias' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-file"></use>
+        </svg>
+        Mis Evidencias
+      </a>
+      {% endif %}
+
+      {% if puede_ver_equipo %}
+      <a href="{% url 'principal:equipo' %}" class="nav-link {% if pagina == 'equipo' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-user"></use>
+        </svg>
+        Resumen de equipo
+      </a>
+      {% endif %}
+
+      {% if puede_verificar_evidencias %}
+      <a href="{% url 'principal:verificacion' %}" class="nav-link {% if pagina == 'verificacion' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-file"></use>
+        </svg>
+        Verificación de actividades
+      </a>
+      {% endif %}
 
       <form method="post" action="{% url 'principal:cerrar_sesion' %}">
         {% csrf_token %}
-        <button class="button secondary" type="submit">
-          Cerrar sesión
-        </button>
+        <button type="submit">Cerrar sesión</button>
       </form>
-
     </nav>
-    <div class="sidebar-foot"><span>SGR · Vista de demostración</span><a href="{% url 'principal:inicio' %}">Cambiar vista</a></div>
+    <div class="sidebar-foot"><span>SGR · Vista de demostración</span><a href="{% url 'principal:inicio' %}">Cambiar
+        vista</a></div>
   </aside>
   <div class="app-content">
     <header class="topbar">
-      <div class="identity"><span class="avatar">{% if supervision %}FS{% else %}AM{% endif %}</span><div><div>Hola, {% if supervision %}Felipe Salas{% else %}Andrea Muñoz{% endif %}</div><div class="identity-details"><span>Cargo: {% if supervision %}Apoyo administrativo{% else %}Territorial OO.CC{% endif %}</span><span class="identity-region">Delegación: Las Compañías</span></div></div></div>
-      <label class="period"><span class="sr-only">Período seleccionado</span><select aria-label="Período seleccionado"><option>Período: Trimestre Jul - Sep 2026 (Abierto)</option></select></label>
+      <div class="identity">
+        <span class="avatar">{{ nombre_usuario|slice:":2"|upper }}</span>
+
+        <div>
+          <div>Hola, {{ nombre_usuario }}</div>
+
+          <div class="identity-details">
+            <span>Cargo: {{ cargo_usuario }}</span>
+            <span class="identity-region">
+              Delegación: {{ delegacion_usuario }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <label class="period">
+        <span class="sr-only">Período seleccionado</span>
+
+        <select aria-label="Período seleccionado">
+          <option>Período: Trimestre Jul - Sep 2026 (Abierto)</option>
+        </select>
+      </label>
     </header>
     <div class="demo-note" role="note"><strong>Demostración:</strong> datos ficticios; los cambios no se guardan.</div>
     <main class="main-content">{% block content %}{% endblock %}</main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-</body></html>
+</body>
+
+</html>
