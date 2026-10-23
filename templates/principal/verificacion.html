@@ -1,11 +1,159 @@
-{% extends 'principal/base.html' %}{% block title %}Verificación de actividades{% endblock %}
+{% extends 'principal/base.html' %}
+{% block title %}Verificación de actividades{% endblock %}
+
 {% block content %}
-<div class="page-heading"><h1>Revisión de Evidencias Pendientes</h1><p>Evalúa las evidencias enviadas para aprobar, rechazar o solicitar correcciones</p></div>
-<section class="review-layout"><div class="review-inbox"><h2>Bandeja de Pendientes (5)</h2><label class="search"><svg class="icon"><use href="#icon-search"/></svg><span class="sr-only">Buscar evidencia pendiente</span><input type="search" placeholder="Buscar …" data-filter-input="revision"></label><div class="review-tabs"><button type="button" class="button outline active" data-demo-pending>Nuevas (5)</button><button type="button" class="button outline" data-demo-pending>Corregidas</button></div>
-  {% for e in evidencias %}<button type="button" class="review-item {% if forloop.first %}selected{% endif %}" data-filter-item="revision" data-review-item data-code="{{ e.codigo }}" data-title="{{ e.titulo }}" data-date="{{ e.fecha }}"><strong>{{ e.codigo }} – {{ e.titulo }}</strong><span><span class="avatar">AM</span> Andrea Muñoz<br> en {{ e.fecha }}</span></button>{% endfor %}
-  </div><div class="review-detail"><h2>Evidencia Seleccionada</h2><h3>Actividad: <span id="review-title">Poda y retiro de ramas en sector Uruguay</span></h3><div class="review-meta"><span>Funcionario: Andrea Muñoz (Territorial OO.CC)</span><span>Fecha: <span id="review-date">17/10/2026</span></span><span>Código: <span id="review-code">COM1762</span></span></div>
-  <div class="evidence-placeholder" role="img" aria-label="Espacio de visualización de una fotografía de evidencia"><svg class="icon"><use href="#icon-image"/></svg><span>Vista previa de la evidencia</span><small>La fotografía se mostrará al conectar el almacenamiento.</small></div>
-  <p>¿La evidencia cumple con el requerimiento y acredita la actividad realizada?</p><label for="review-comment">Observación</label><textarea id="review-comment" placeholder="Escribe una observación o justificación …"></textarea><div class="review-actions"><button type="button" class="button primary" data-demo-pending>Rechazar</button><button type="button" class="button warning" data-demo-pending>Solicitar Corrección</button><button type="button" class="button success" data-demo-pending>Aprobar Evidencia</button></div>
+<div class="page-heading">
+  <h1>Revisión de Evidencias Pendientes</h1>
+  <p>Evalúa las evidencias enviadas para aprobar, rechazar o solicitar correcciones</p>
+</div>
+
+<section class="review-layout">
+  <!-- PANEL IZQUIERDO: Bandeja de entrada -->
+  <div class="review-inbox">
+    <h2>Bandeja de Pendientes ({{ total_pendientes }})</h2>
+    <label class="search">
+      <svg class="icon"><use href="#icon-search"/></svg>
+      <span class="sr-only">Buscar evidencia pendiente</span>
+      <input type="search" placeholder="Buscar …" data-filter-input="revision">
+    </label>
+    <div class="review-tabs">
+      <button type="button" class="button outline active">Nuevas ({{ total_pendientes }})</button>
+      <button type="button" class="button outline">Corregidas</button>
+    </div>
+
+    {% for e in evidencias %}
+      <!-- Guardamos todos los datos reales en atributos 'data-' para que el JS los lea -->
+      <button type="button" class="review-item" 
+        data-code="{{ e.codigo }}" 
+        data-title="{{ e.solicitud }}" 
+        data-date="{{ e.fecha_registro|date:'d/m/Y' }}"
+        data-author="{{ e.funcionario.get_full_name|default:e.funcionario.username }}"
+        data-initials="{{ e.funcionario.first_name|first|default:'F' }}{{ e.funcionario.last_name|first|default:'' }}"
+        data-image="{% if e.fotografia %}{{ e.fotografia.url }}{% else %}none{% endif %}">
+        
+        <strong>{{ e.codigo }} – {{ e.solicitud|truncatechars:35 }}</strong>
+        <span>
+          <span class="avatar">{{ e.funcionario.first_name|first|default:'F' }}{{ e.funcionario.last_name|first|default:'' }}</span> 
+          {{ e.funcionario.get_full_name|default:e.funcionario.username }}<br> en {{ e.fecha_registro|date:'d/m/Y' }}
+        </span>
+      </button>
+    {% empty %}
+      <div style="padding: 2rem; text-align: center; color: #6b7280; font-size: 0.9rem;">
+        No hay evidencias pendientes en este momento. ¡Todo al día!
+      </div>
+    {% endfor %}
+  </div>
+  
+  <!-- PANEL DERECHO: Detalle y Acciones -->
+  <div class="review-detail">
+    <h2>Evidencia Seleccionada</h2>
+    
+    <!-- Formulario que envuelve las acciones -->
+    <form method="post" id="form-verificacion">
+      {% csrf_token %}
+      <input type="hidden" name="codigo" id="hidden-review-code">
+      <input type="hidden" name="nuevo_estado" id="hidden-review-state">
+
+      <h3>Actividad: <span id="review-title">Selecciona un registro de la lista...</span></h3>
+      <div class="review-meta">
+        <span>Funcionario: <span id="review-author">-</span></span>
+        <span>Fecha: <span id="review-date">-</span></span>
+        <span>Código: <span id="review-code">-</span></span>
+      </div>
+    
+      <!-- Contenedor dinámico de la imagen -->
+      <div id="evidence-image-container" class="evidence-placeholder" role="img" aria-label="Fotografía de evidencia">
+        <svg class="icon"><use href="#icon-image"/></svg>
+        <span>Vista previa de la evidencia</span>
+        <small>La fotografía se cargará al seleccionar un registro.</small>
+      </div>
+    
+      <p>¿La evidencia cumple con el requerimiento y acredita la actividad realizada?</p>
+      <label for="review-comment">Observación (Justificación)</label>
+      <textarea id="review-comment" name="observacion" placeholder="Escribe una observación o justificación …"></textarea>
+      
+      <div class="review-actions">
+        <!-- Los botones ahora disparan una función que guarda el estado elegido -->
+        <button type="button" class="button primary" onclick="enviarRevision('Rechazada')">Rechazar</button>
+        <button type="button" class="button warning" onclick="enviarRevision('Corregir')">Solicitar Corrección</button>
+        <button type="button" class="button success" onclick="enviarRevision('Aprobada')">Aprobar Evidencia</button>
+      </div>
+    </form>
   </div>
 </section>
+
+<!-- Script para cambiar entre evidencias dinámicamente -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const items = document.querySelectorAll('.review-item');
+    const imgContainer = document.getElementById('evidence-image-container');
+
+    function loadEvidence(btn) {
+      // Cambiar el color del botón seleccionado en la lista
+      items.forEach(i => i.classList.remove('selected'));
+      btn.classList.add('selected');
+
+      // Cargar los textos
+      document.getElementById('review-title').textContent = btn.dataset.title;
+      document.getElementById('review-author').textContent = btn.dataset.author;
+      document.getElementById('review-date').textContent = btn.dataset.date;
+      document.getElementById('review-code').textContent = btn.dataset.code;
+      
+      // Cargar el código al formulario oculto
+      document.getElementById('hidden-review-code').value = btn.dataset.code;
+      document.getElementById('review-comment').value = ""; // Limpiar textarea al cambiar de evidencia
+
+      // Cargar la imagen real
+      if (btn.dataset.image && btn.dataset.image !== "none") {
+        imgContainer.innerHTML = `<img src="${btn.dataset.image}" alt="Evidencia" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">`;
+        imgContainer.style.padding = "0";
+        imgContainer.style.border = "none";
+      } else {
+        imgContainer.innerHTML = `
+          <svg class="icon"><use href="#icon-image"/></svg>
+          <span>Sin fotografía adjunta</span>
+          <small>Este registro no cuenta con una imagen válida.</small>`;
+        imgContainer.style.padding = "3rem 1rem";
+        imgContainer.style.border = "2px dashed #cbd5e1";
+      }
+    }
+
+    // Asignar los clics a la lista
+    items.forEach(item => {
+      item.addEventListener('click', function() { loadEvidence(this); });
+    });
+
+    // Si hay evidencias en la lista, auto-seleccionar la primera al cargar la página
+    if (items.length > 0) {
+      loadEvidence(items[0]);
+    }
+  });
+
+  // Función para el envío del formulario al presionar un botón de color
+  function enviarRevision(estado) {
+    const codigo = document.getElementById('hidden-review-code').value;
+    if (!codigo) {
+      alert("Por favor, selecciona una evidencia primero.");
+      return;
+    }
+
+    const form = document.getElementById('form-verificacion');
+    const textarea = document.getElementById('review-comment');
+    
+    // Asignamos el estado al input oculto
+    document.getElementById('hidden-review-state').value = estado;
+
+    // Si se rechaza o manda a corregir, exigir que se escriba el motivo
+    if (estado === 'Rechazada' || estado === 'Corregir') {
+      textarea.required = true;
+    } else {
+      textarea.required = false;
+    }
+
+    // Si todo está válido, enviamos los datos a Python
+    if (form.reportValidity()) {
+      form.submit();
+    }
+  }
+</script>
 {% endblock %}

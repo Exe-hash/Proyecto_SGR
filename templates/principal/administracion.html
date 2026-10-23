@@ -1,0 +1,258 @@
+{% extends 'principal/base.html' %}
+{% block title %}Administración del Sistema{% endblock %}
+
+{% block content %}
+<div class="heading-row">
+  <div class="page-heading">
+    <h1>Administración del Sistema</h1>
+    <p>Gestión de usuarios, roles, metas, catálogos y períodos de evaluación</p>
+  </div>
+</div>
+
+<!-- Menú de Pestañas -->
+<div class="admin-tabs" style="display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 1rem;">
+  <button class="button tab-btn active" data-target="tab-usuarios">Usuarios y Roles</button>
+  <button class="button outline tab-btn" data-target="tab-metas">Cargos y Metas</button>
+  <button class="button outline tab-btn" data-target="tab-catalogos">Catálogos</button>
+  <button class="button outline tab-btn" data-target="tab-periodos">Períodos</button>
+</div>
+
+<!-- PESTAÑA 1: USUARIOS Y ROLES -->
+<section id="tab-usuarios" class="card tab-content">
+  <div class="section-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h2 style="margin: 0;">Gestión de Delegaciones y Usuarios</h2>
+    <button class="button primary">✚ Nuevo Funcionario</button>
+  </div>
+  
+  <div class="section-toolbar" style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+    <label style="font-weight: bold; margin-right: 1rem;">Filtro:</label>
+    <select style="padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: auto;">
+      <option>Todas las delegaciones</option>
+      <option>La Torre</option>
+      <option>Las Compañías</option>
+    </select>
+    
+    <label class="search" style="margin-left: 1rem;">
+      <svg class="icon"><use href="#icon-search"/></svg>
+      <span class="sr-only">Buscar</span>
+      <input type="search" placeholder="Buscar por RUT o Nombre" data-filter-input="usuarios">
+    </label>
+  </div>
+
+  <div class="table-wrap">
+    <table class="goals-table">
+      <thead>
+        <tr>
+          <th scope="col">Nombre</th>
+          <th scope="col">RUT</th>
+          <th scope="col">Delegación</th>
+          <th scope="col">Rol / Cargo</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-filter-item="usuarios">
+          <td>Catherine Contreras</td>
+          <td>18.234.123-K</td>
+          <td>Las Compañías</td>
+          <td>Funcionario / Territorial</td>
+          <td><span class="status-pill aprobada"><i></i>Activo</span></td>
+          <td><button class="button mini outline">Editar</button></td>
+        </tr>
+        <tr data-filter-item="usuarios">
+          <td>Miguel Araya</td>
+          <td>12.987.654-3</td>
+          <td>La Torre</td>
+          <td>Supervisor / Coordinador</td>
+          <td><span class="status-pill rechazada"><i></i>Inactivo</span></td>
+          <td><button class="button mini outline">Editar</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PESTAÑA 2: CARGOS Y METAS -->
+<section id="tab-metas" class="card tab-content" style="display: none;">
+  <div class="section-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h2 style="margin: 0;">Configuración de Cargos y Metas (HU-04, HU-05)</h2>
+    <button class="button primary" onclick="document.getElementById('modal-meta').showModal()">✚ Nueva Meta</button>
+  </div>
+  
+  <div class="table-wrap">
+    <table class="goals-table">
+      <thead>
+        <tr>
+          <th>Ítem a evaluar</th>
+          <th>Cantidad Meta</th>
+          <th>Ponderación</th>
+          <th>Accion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for meta in metas_reales %}
+        <tr>
+          <td>{{ meta.nombre }}</td>
+          <td>{{ meta.valor_objetivo }}</td>
+          <td>{{ meta.ponderacion }}%</td>
+          <td>
+            <div style="display: flex; gap: 0.5rem;">
+              <!-- Botón Editar: Abre el modal específico de esta fila -->
+              <button class="button mini outline" onclick="document.getElementById('modal-editar-{{ meta.id }}').showModal()">Editar</button>
+              
+              <!-- Botón Eliminar: Formulario rápido con alerta de seguridad -->
+              <form method="post" action="{% url 'principal:administracion' %}" onsubmit="return confirm('¿Seguro que deseas eliminar la meta {{ meta.nombre }}?');" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="eliminar_meta" value="1">
+                <input type="hidden" name="meta_id" value="{{ meta.id }}">
+                <button type="submit" class="button mini outline" style="color: #ef4444; border-color: #ef4444;">Eliminar</button>
+              </form>
+            </div>
+
+            <!-- MODAL EDITAR META (Exclusivo para esta meta) -->
+            <dialog id="modal-editar-{{ meta.id }}" class="dialog" style="padding: 2rem; border-radius: 12px; border: 1px solid #cbd5e1; max-width: 400px; width: 100%;">
+              <div class="dialog-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 style="margin: 0;">Editar Meta</h2>
+                <button type="button" onclick="document.getElementById('modal-editar-{{ meta.id }}').close()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+              </div>
+              <form method="post" action="{% url 'principal:administracion' %}">
+                {% csrf_token %}
+                <input type="hidden" name="editar_meta" value="1">
+                <input type="hidden" name="meta_id" value="{{ meta.id }}">
+                
+                <div style="margin-bottom: 1rem;">
+                  <label style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Nombre de la meta</label>
+                  <input type="text" name="nombre" value="{{ meta.nombre }}" required style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                  <label style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Cantidad objetivo</label>
+                  <input type="number" name="valor_objetivo" value="{{ meta.valor_objetivo }}" required min="1" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                </div>
+                
+                <div style="margin-bottom: 1.5rem;">
+                  <label style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Ponderación (%)</label>
+                  <input type="number" name="ponderacion" value="{{ meta.ponderacion }}" required min="1" max="100" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+                </div>
+                
+                <button type="submit" class="button primary" style="width: 100%;">Guardar Cambios</button>
+              </form>
+            </dialog>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="text-align: center; padding: 2rem;">No hay metas creadas aún.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- MODAL CREAR META -->
+<dialog id="modal-meta" class="dialog" style="padding: 2rem; border-radius: 12px; border: 1px solid #cbd5e1; max-width: 400px; width: 100%;">
+  <div class="dialog-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h2 style="margin: 0;">Nueva Meta</h2>
+    <button type="button" onclick="document.getElementById('modal-meta').close()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+  </div>
+  <form method="post" action="{% url 'principal:administracion' %}">
+    {% csrf_token %}
+    <input type="hidden" name="crear_meta" value="1">
+    
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Nombre de la meta</label>
+      <input type="text" name="nombre" required style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="Ej: Atención de público">
+    </div>
+    
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Cantidad objetivo</label>
+      <input type="number" name="valor_objetivo" required min="1" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="Ej: 45">
+    </div>
+    
+    <div style="margin-bottom: 1.5rem;">
+      <label style="display: block; font-weight: bold; margin-bottom: 0.5rem;">Ponderación (%)</label>
+      <input type="number" name="ponderacion" required min="1" max="100" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="Ej: 10">
+    </div>
+    
+    <button type="submit" class="button primary" style="width: 100%;">Guardar Meta</button>
+  </form>
+</dialog>
+
+<!-- PESTAÑA 3: CATÁLOGOS -->
+<section id="tab-catalogos" class="card tab-content" style="display: none;">
+  <div class="section-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <h2 style="margin: 0;">Seleccionar catálogo a editar:</h2>
+      <select style="padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1;">
+        <option>Tipos de sub-atención (Área Social)</option>
+        <option>Tipos de actividades</option>
+      </select>
+    </div>
+    <button class="button primary">✚ Nueva Actividad</button>
+  </div>
+
+  <div class="table-wrap">
+    <table class="goals-table">
+      <thead>
+        <tr>
+          <th scope="col">Nombre de la actividad</th>
+          <th scope="col">Estado</th>
+          <th scope="col" style="text-align: right;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Orientación Social</td>
+          <td><span class="status-pill aprobada"><i></i>Activo</span></td>
+          <td style="text-align: right;">
+            <select class="button mini outline" style="margin-right: 0.5rem;"><option>Desactivar</option></select>
+            <button class="button mini outline">Editar</button>
+          </td>
+        </tr>
+        <tr>
+          <td>Informe Aporte Económico</td>
+          <td><span class="status-pill rechazada"><i></i>Inactivo</span></td>
+          <td style="text-align: right;">
+            <select class="button mini outline" style="margin-right: 0.5rem;"><option>Activar</option></select>
+            <button class="button mini outline">Editar</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PESTAÑA 4: PERÍODOS -->
+<section id="tab-periodos" class="card tab-content" style="display: none;">
+  <div class="section-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h2 style="margin: 0;">Gestión de Períodos de Medición (HU-28)</h2>
+    <button class="button primary">✚ Nuevo Período</button>
+  </div>
+  <p style="color: #64748b; margin-bottom: 1rem;">Apertura y cierre de trimestres para evaluación.</p>
+</section>
+
+<!-- SCRIPT DE PESTAÑAS -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Apagar todos los botones y ocultar contenidos
+        tabBtns.forEach(b => {
+          b.classList.remove('active');
+          b.classList.add('outline');
+        });
+        tabContents.forEach(c => c.style.display = 'none');
+
+        // Encender el botón clicado y mostrar su contenido
+        btn.classList.remove('outline');
+        btn.classList.add('active');
+        const targetId = btn.getAttribute('data-target');
+        document.getElementById(targetId).style.display = 'block';
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -49,10 +49,16 @@
       <circle cx="8" cy="8" r="1.5" />
       <path d="m4 18 6-6 3 3 3-3 4 5" />
     </symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+    </symbol>
   </svg>
   <aside class="sidebar" aria-label="Navegación principal">
     <div class="brand" aria-hidden="true"></div>
     <nav class="sidebar-nav">
+      <!-- Solo los Funcionarios verán su Panel, Registro y Evidencias -->
+      {% if puede_registrar_actividades %}
       <a href="{% url 'principal:panel' %}" class="nav-link {% if pagina == 'panel' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
           <use href="#icon-home"></use>
@@ -60,15 +66,22 @@
         Mi Panel
       </a>
 
-      {% if puede_registrar_actividades %}
       <a href="{% url 'principal:actividades' %}" class="nav-link {% if pagina == 'actividades' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
           <use href="#icon-edit"></use>
         </svg>
         Registrar Actividades
       </a>
+      
+      <a href="{% url 'principal:evidencias' %}" class="nav-link {% if pagina == 'evidencias' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-file"></use>
+        </svg>
+        Mis Evidencias
+      </a>
       {% endif %}
 
+      <!-- Ambos roles (Funcionario y Jefatura) verán la Agenda -->
       {% if puede_ver_agenda %}
       <a href="{% url 'principal:agenda' %}" class="nav-link {% if pagina == 'agenda' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
@@ -78,15 +91,7 @@
       </a>
       {% endif %}
 
-      {% if puede_registrar_actividades %}
-      <a href="{% url 'principal:evidencias' %}" class="nav-link {% if pagina == 'evidencias' %}active{% endif %}">
-        <svg class="icon" aria-hidden="true">
-          <use href="#icon-file"></use>
-        </svg>
-        Mis Evidencias
-      </a>
-      {% endif %}
-
+      <!-- Solo la Jefatura verá su Panel de Equipo y Verificación -->
       {% if puede_ver_equipo %}
       <a href="{% url 'principal:equipo' %}" class="nav-link {% if pagina == 'equipo' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
@@ -94,9 +99,7 @@
         </svg>
         Resumen de equipo
       </a>
-      {% endif %}
-
-      {% if puede_verificar_evidencias %}
+      
       <a href="{% url 'principal:verificacion' %}" class="nav-link {% if pagina == 'verificacion' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
           <use href="#icon-file"></use>
@@ -104,10 +107,21 @@
         Verificación de actividades
       </a>
       {% endif %}
+      
+      <!-- Solo el Administrador verá este botón -->
+      {% if puede_administrar %}
+      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 1rem 0;">
+      <a href="{% url 'principal:administracion' %}" class="nav-link {% if pagina == 'administracion' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true">
+          <use href="#icon-settings"></use>
+        </svg>
+        Administración del sistema
+      </a>
+      {% endif %}
 
-      <form method="post" action="{% url 'principal:cerrar_sesion' %}">
+      <form method="post" action="{% url 'principal:cerrar_sesion' %}" style="margin-top: auto;">
         {% csrf_token %}
-        <button type="submit">Cerrar sesión</button>
+        <button type="submit" style="width: 100%; background: none; border: 1px solid #ef4444; color: #ef4444; padding: 0.5rem; border-radius: 6px; cursor: pointer;">Cerrar sesión</button>
       </form>
     </nav>
     <div class="sidebar-foot"><span>SGR · Vista de demostración</span><a href="{% url 'principal:inicio' %}">Cambiar
@@ -142,6 +156,47 @@
     <main class="main-content">{% block content %}{% endblock %}</main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <!-- SCRIPT GLOBAL DE INTERFAZ -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    
+    // 1. Motor de búsqueda en tiempo real para todas las pantallas
+    const searchInputs = document.querySelectorAll('input[data-filter-input]');
+
+    searchInputs.forEach(input => {
+      input.addEventListener('input', function() {
+        // Capturamos lo que el usuario escribe, en minúsculas
+        const term = this.value.toLowerCase().trim();
+        // Leemos a qué grupo de tarjetas afecta (ej: "evidencias" o "revision")
+        const filterName = this.dataset.filterInput; 
+        
+        const items = document.querySelectorAll(`[data-filter-item="${filterName}"]`);
+        
+        items.forEach(item => {
+          // Extraemos todo el texto visible de la fila o tarjeta
+          const text = item.textContent.toLowerCase();
+          
+          // Si el texto incluye lo que escribimos, lo mostramos. Si no, lo ocultamos.
+          if (text.includes(term)) {
+            item.style.display = '';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // 2. Lógica visual para que las pestañas (Nuevas / Corregidas) en la vista de Jefatura se animen al hacer clic
+    const reviewTabs = document.querySelectorAll('.review-tabs .button');
+    reviewTabs.forEach(tab => {
+      tab.addEventListener('click', function() {
+        reviewTabs.forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+  });
+</script>
 </body>
 
 </html>
