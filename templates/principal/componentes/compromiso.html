@@ -1,1 +1,30 @@
-<button type="button" class="commitment-card" data-commitment data-code="{{ c.codigo }}" data-title="{{ c.titulo }}" data-territory="{{ c.territorio }}" data-responsible="{{ c.responsable }}" data-state="{{ c.estado }}" data-area="{{ c.area }}" data-requester="{{ c.solicitante }}" data-date="{{ c.fecha }}"><span class="commitment-top"><span class="territory">Territorio: {{ c.territorio }}</span><span class="due"><svg class="icon"><use href="#icon-clock"/></svg> {{ c.plazo|upper }}</span></span><strong>{{ c.titulo }}</strong><small>Resp: {{ c.responsable }}</small></button>
+<button type="button" class="commitment-card" data-commitment 
+  data-code="{{ c.codigo }}" 
+  data-title="{{ c.titulo }}" 
+  data-territory="{{ c.territorio.nombre }}" 
+  data-responsible="{{ c.responsable.get_full_name|default:c.responsable.username }}" 
+  data-state="{{ c.estado }}" 
+  data-area="{{ c.area }}" 
+  data-requester="{{ c.solicitante }}" 
+  data-date="{{ c.fecha|date:'Y-m-d' }}">
+  
+  <span class="commitment-top">
+    <span class="territory">Territorio: {{ c.territorio.nombre }}</span>
+    <span class="due"><svg class="icon"><use href="#icon-clock"/></svg> {{ c.plazo|upper }}</span>
+  </span>
+  
+  <strong>{{ c.titulo }}</strong>
+  <small>Resp: {{ c.responsable.get_full_name|default:c.responsable.username }}</small>
+  
+  <!-- Historial oculto para que lo lea el JavaScript -->
+  <div class="historial-oculto" style="display: none;">
+    {% for obs in c.observaciones.all %}
+      <p class="history-entry" style="margin-bottom: 8px;">
+        <span style="color: #9ca3af;">●</span> 
+        {{ obs.autor.get_full_name|default:obs.autor.username }} ({{ obs.fecha|date:"d/m/Y, H:i" }}) - {{ obs.texto }}
+      </p>
+    {% empty %}
+      <p class="history-entry">Sin observaciones registradas en esta etapa.</p>
+    {% endfor %}
+  </div>
+</button>

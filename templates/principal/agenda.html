@@ -1,12 +1,223 @@
-{% extends 'principal/base.html' %}{% block title %}Agenda colectiva{% endblock %}
+{% extends 'principal/base.html' %}
+{% block title %}Agenda colectiva{% endblock %}
+
 {% block content %}
-<div class="heading-row"><h1>Agenda Colectiva (Tubo de Trabajo)</h1><div class="heading-actions"><label class="search"><svg class="icon"><use href="#icon-search"/></svg><span class="sr-only">Buscar compromiso</span><input type="search" placeholder="Buscar …" id="board-search"></label><a class="button primary" href="{% url 'principal:actividades' %}">＋ &nbsp; Registrar actividad</a></div></div>
-<div class="filters"><label><span class="sr-only">Territorio</span><select id="board-territory"><option value="">Territorio: Todos</option><option>Latorre</option><option>Toqui</option></select></label><label><span class="sr-only">Responsable</span><select id="board-person"><option value="">Responsable: Todos</option><option>Andrea Muñoz</option><option>María Rojas</option><option>Luis Molina</option><option>Carla Soto</option></select></label><label><span class="sr-only">Área de apoyo</span><select id="board-area"><option value="">Área de Apoyo: Todas</option><option>Alumbrado público</option><option>Apoyo territorial</option><option>Tránsito</option><option>Aseo y ornato</option></select></label><label><span class="sr-only">Rango de fechas</span><select id="board-date"><option value="">Rango de Fechas: Todas</option><option value="2026-10">Octubre 2026</option><option value="2026-11">Noviembre 2026</option></select></label></div>
+<div class="heading-row">
+  <h1>Agenda Colectiva (Tubo de Trabajo)</h1>
+  <div class="heading-actions">
+    <label class="search">
+      <svg class="icon"><use href="#icon-search"/></svg>
+      <span class="sr-only">Buscar compromiso</span>
+      <input type="search" placeholder="Buscar …" id="board-search">
+    </label>
+    <a class="button primary" href="{% url 'principal:actividades' %}">＋ &nbsp; Registrar actividad</a>
+  </div>
+</div>
+
+<div class="filters">
+  <label><span class="sr-only">Territorio</span>
+    <select id="board-territory">
+      <option value="">Territorio: Todos</option>
+      <!-- Opciones estáticas para el filtro visual -->
+      <option>Latorre</option>
+      <option>Toqui</option>
+      <option>Las Compañías Alta</option>
+      <option>Las Compañías Baja</option>
+    </select>
+  </label>
+  <label><span class="sr-only">Responsable</span>
+    <select id="board-person">
+      <option value="">Responsable: Todos</option>
+    </select>
+  </label>
+  <label><span class="sr-only">Área de apoyo</span>
+    <select id="board-area">
+      <option value="">Área de Apoyo: Todas</option>
+      <option>Alumbrado público</option>
+      <option>Aseo y ornato</option>
+      <option>Tránsito</option>
+    </select>
+  </label>
+</div>
+
 <section class="board" aria-label="Compromisos por estado">
-  <div class="board-column ingresado" data-board-column="Ingresado"><h2><i></i>Ingresado <span data-count></span></h2><div class="board-cards">{% for c in compromisos %}{% if c.estado == 'Ingresado' %}{% include 'principal/componentes/compromiso.html' %}{% endif %}{% endfor %}</div></div>
-  <div class="board-column pendiente" data-board-column="Pendiente"><h2><i></i>Pendiente <span data-count></span></h2><div class="board-cards">{% for c in compromisos %}{% if c.estado == 'Pendiente' %}{% include 'principal/componentes/compromiso.html' %}{% endif %}{% endfor %}</div></div>
-  <div class="board-column proceso" data-board-column="En proceso"><h2><i></i>En proceso <span data-count></span></h2><div class="board-cards">{% for c in compromisos %}{% if c.estado == 'En proceso' %}{% include 'principal/componentes/compromiso.html' %}{% endif %}{% endfor %}</div></div>
-  <div class="board-column realizado" data-board-column="Realizado"><h2><i></i>Realizado <span data-count></span></h2><div class="board-cards">{% for c in compromisos %}{% if c.estado == 'Realizado' %}{% include 'principal/componentes/compromiso.html' %}{% endif %}{% endfor %}</div></div>
+  <!-- Columna 1: Pendiente -->
+  <div class="board-column pendiente" data-board-column="Pendiente">
+    <h2><i></i>Pendiente <span data-count></span></h2>
+    <div class="board-cards">
+      {% for c in compromisos_reales %}
+        {% if c.estado == 'Pendiente' %}
+          {% include 'principal/componentes/compromiso.html' %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Columna 2: En proceso -->
+  <div class="board-column proceso" data-board-column="En proceso">
+    <h2><i></i>En proceso <span data-count></span></h2>
+    <div class="board-cards">
+      {% for c in compromisos_reales %}
+        {% if c.estado == 'En proceso' %}
+          {% include 'principal/componentes/compromiso.html' %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Columna 3: Completado -->
+  <div class="board-column realizado" data-board-column="Completado">
+    <h2><i></i>Completado <span data-count></span></h2>
+    <div class="board-cards">
+      {% for c in compromisos_reales %}
+        {% if c.estado == 'Completado' %}
+          {% include 'principal/componentes/compromiso.html' %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Columna 4: Rechazado -->
+  <div class="board-column ingresado" data-board-column="Rechazado">
+    <h2><i></i>Rechazado <span data-count></span></h2>
+    <div class="board-cards">
+      {% for c in compromisos_reales %}
+        {% if c.estado == 'Rechazado' %}
+          {% include 'principal/componentes/compromiso.html' %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
 </section>
-<aside id="commitment-drawer" class="drawer" hidden aria-label="Detalle del compromiso"><div class="drawer-head"><h2>Detalle del Compromiso</h2><button type="button" id="drawer-close" aria-label="Cerrar detalle">×</button></div><p>Código: <strong id="detail-code"></strong></p><label>Estado Actual<select id="detail-state"><option>Ingresado</option><option>Pendiente</option><option>En proceso</option><option>Realizado</option></select></label><p class="detail-info">Solicitante: <span id="detail-requester"></span><br>Área de Apoyo: <span id="detail-area"></span><br>Territorio: <span id="detail-territory"></span></p><label>Responsable<input id="detail-responsible" readonly></label><label>Fecha Comprometida<input id="detail-date" type="date" readonly></label><h3>Historial de Avance y Observaciones</h3><p class="history-entry">Sin observaciones registradas en esta demostración.</p><div class="drawer-observation"><label class="sr-only" for="drawer-comment">Nueva observación</label><input id="drawer-comment" placeholder="Nueva observación o avance…"><button type="button" class="button primary" id="add-comment">Agregar</button></div><small>Los cambios son temporales y no se guardan.</small></aside>
+
+<!-- Restauramos el diseño exacto, pero envuelto en un formulario -->
+<aside id="commitment-drawer" class="drawer" hidden aria-label="Detalle del compromiso">
+  <form method="post">
+    {% csrf_token %}
+    <div class="drawer-head">
+      <h2>Detalle del Compromiso</h2>
+      <button type="button" id="drawer-close" aria-label="Cerrar detalle">×</button>
+    </div>
+    
+    <!-- Mantenemos el código visual intacto -->
+    <p>Código: <strong id="detail-code"></strong></p>
+    <!-- Agregamos un campo invisible para que Python sepa qué guardar -->
+    <input type="hidden" name="codigo" id="hidden-detail-code">
+    
+    <label>Estado Actual
+      <select id="detail-state" name="nuevo_estado">
+        <option value="Pendiente">Pendiente</option>
+        <option value="En proceso">En proceso</option>
+        <option value="Completado">Completado</option>
+        <option value="Rechazado">Rechazado</option>
+      </select>
+    </label>
+    
+    <p class="detail-info">
+      Solicitante: <span id="detail-requester"></span><br>
+      Área de Apoyo: <span id="detail-area"></span><br>
+      Territorio: <span id="detail-territory"></span>
+    </p>
+    
+    <label>Responsable
+      <input id="detail-responsible" readonly>
+    </label>
+    <label>Fecha Comprometida
+      <input id="detail-date" type="date" readonly>
+    </label>
+    
+    <!-- Recuperamos el título del historial -->
+    <h3>Historial de Avance y Observaciones</h3>
+    <div id="drawer-history-container"></div>
+    
+    <!-- Recuperamos tu barra de texto original y su botón rojo -->
+    <div class="drawer-observation">
+      <label class="sr-only" for="drawer-comment">Nueva observación</label>
+      <input id="drawer-comment" name="observacion" placeholder="Nueva observación o avance…">
+      <!-- Este botón mantiene su clase visual, pero ahora hace el Update (type="submit") -->
+      <button type="submit" class="button primary" id="add-comment">Agregar</button>
+    </div>
+    <small>Los cambios de estado se guardarán al presionar Agregar.</small>
+  </form>
+</aside>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const cards = document.querySelectorAll('.commitment-card');
+    const drawer = document.getElementById('commitment-drawer');
+    const closeBtn = document.getElementById('drawer-close');
+    const selectState = document.getElementById('detail-state');
+    const formDrawer = drawer.querySelector('form');
+
+    // 1. Diccionario de colores suaves para el menú desplegable (Fondo y Texto)
+    const coloresEstado = {
+      "Pendiente": { bg: "#fef3c7", text: "#92400e" },   // Amarillo suave
+      "En proceso": { bg: "#dbeafe", text: "#1e40af" },  // Azul suave
+      "Completado": { bg: "#dcfce3", text: "#166534" },  // Verde suave
+      "Rechazado": { bg: "#fee2e2", text: "#991b1b" }    // Rojo suave
+    };
+
+    // Función para pintar el cuadro de selección
+    function actualizarColorSelect() {
+      const color = coloresEstado[selectState.value];
+      if (color) {
+        selectState.style.backgroundColor = color.bg;
+        selectState.style.color = color.text;
+        selectState.style.fontWeight = "600";
+      }
+    }
+
+    // Escuchamos si el usuario cambia el estado a mano para cambiar el color en vivo
+    selectState.addEventListener('change', actualizarColorSelect);
+
+    cards.forEach(card => {
+      card.addEventListener('click', function() {
+        document.getElementById('detail-code').textContent = this.dataset.code;
+        document.getElementById('hidden-detail-code').value = this.dataset.code;
+        
+        selectState.value = this.dataset.state;
+        // Aplicamos el color inmediatamente al abrir el cajón
+        actualizarColorSelect();
+        
+        const [year, month, day] = this.dataset.date.split('-');
+        document.getElementById('detail-requester').textContent = `${this.dataset.requester} (Fecha: ${day}/${month}/${year})`;
+        
+        document.getElementById('detail-area').textContent = this.dataset.area;
+        document.getElementById('detail-territory').textContent = this.dataset.territory;
+        document.getElementById('detail-responsible').value = this.dataset.responsible;
+        
+        // Copiamos el historial oculto de la tarjeta al cajón
+        document.getElementById('drawer-history-container').innerHTML = this.querySelector('.historial-oculto').innerHTML;
+        
+        drawer.removeAttribute('hidden');
+      });
+    });
+
+    if(closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        drawer.setAttribute('hidden', '');
+      });
+    }
+
+    // 2. Truco de memoria para evitar que el cajón parezca cerrarse
+    if (formDrawer) {
+      formDrawer.addEventListener('submit', function() {
+        // Justo antes de que la página recargue, guardamos el código de esta tarjeta
+        localStorage.setItem('tarjetaAbierta', document.getElementById('hidden-detail-code').value);
+      });
+    }
+
+    // Apenas la página carga, revisamos si el navegador recuerda alguna tarjeta
+    const tarjetaGuardada = localStorage.getItem('tarjetaAbierta');
+    if (tarjetaGuardada) {
+      localStorage.removeItem('tarjetaAbierta'); // Limpiamos la memoria
+      
+      // Buscamos la tarjeta exacta en el tablero y la "cliqueamos" con código
+      const tarjetaAutoclick = document.querySelector(`.commitment-card[data-code="${tarjetaGuardada}"]`);
+      if (tarjetaAutoclick) {
+        tarjetaAutoclick.click();
+      }
+    }
+  });
+</script>
 {% endblock %}

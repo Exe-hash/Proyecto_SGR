@@ -1,15 +1,150 @@
-{% extends 'principal/base.html' %}{% block title %}Mi panel{% endblock %}
+{% extends 'principal/base.html' %}
+{% block title %}Mi panel{% endblock %}
+
 {% block content %}
 <h1 class="sr-only">Mi panel</h1>
+
+<!-- TARJETAS SUPERIORES -->
 <section class="summary-grid" aria-label="Resumen personal">
-  <article class="card summary-card"><h2 class="eyebrow">Estado de cumplimiento al día</h2><div class="gauge" aria-label="Cumplimiento 40 por ciento"><div class="gauge-arc" style="--gauge: 40%"></div><div class="gauge-value">40%</div></div><span class="status-pill corregir"><i></i>En riesgo</span><div class="progress-labels"><span>Meta esperada <strong class="blue-text">60%</strong></span><span>Desviación <strong class="red-text">−20 puntos</strong></span></div><div class="progress-track"><span style="width:40%"></span></div></article>
-  <article class="card summary-card"><h2 class="eyebrow">Estado de mis evidencias</h2><div class="evidence-stats"><a href="{% url 'principal:evidencias' %}" class="stat green"><span>Aprobadas</span><b>28</b></a><a href="{% url 'principal:evidencias' %}" class="stat yellow"><span>En revisión</span><b>4</b></a><a href="{% url 'principal:evidencias' %}" class="stat rose"><span>Rechazadas</span><b>2</b><small>Corregir →</small></a></div></article>
-  <article class="card summary-card"><h2 class="eyebrow normal-case">Ajustes de Desempeño</h2><div class="adjustments"><div class="adjustment green"><strong>+1 Felicitación</strong><span>Junta de vecinos<br>de ejemplo</span><b>+2,0% ponderado</b></div><div class="adjustment gray"><strong>0 Reclamos<br>registrados</strong><b>0,0% penalización</b></div></div></article>
+  <!-- Gráfico Circular Dinámico -->
+  <article class="card summary-card">
+    <h2 class="eyebrow">Estado de cumplimiento al día</h2>
+    
+    <div class="gauge" aria-label="Cumplimiento {{ porcentaje_avance }} por ciento">
+      <div class="gauge-arc" style="--gauge: {{ porcentaje_avance }}%"></div>
+      <div class="gauge-value">{{ porcentaje_avance }}%</div>
+    </div>
+    
+    <!-- Píldora de estado dinámica -->
+    <span class="status-pill {% if porcentaje_avance < 50 %}rechazada{% elif porcentaje_avance < 80 %}corregir{% else %}aprobada{% endif %}">
+      <i></i>
+      {% if porcentaje_avance < 50 %}Crítico
+      {% elif porcentaje_avance < 80 %}En riesgo
+      {% else %}Óptimo{% endif %}
+    </span>
+    
+    <div class="progress-labels">
+      <span>Meta esperada <strong class="blue-text">60%</strong></span>
+      <span>Avance actual <strong>{{ porcentaje_avance }}%</strong></span>
+    </div>
+    <div class="progress-track"><span style="width:{{ porcentaje_avance }}%"></span></div>
+  </article>
+
+  <!-- Tarjeta de Evidencias Conectada a Base de Datos -->
+  <article class="card summary-card">
+    <h2 class="eyebrow">Estado de mis evidencias</h2>
+    <div class="evidence-stats">
+      <a href="{% url 'principal:evidencias' %}" class="stat green">
+        <span>Aprobadas</span><b>{{ ev_aprobadas }}</b>
+      </a>
+      <a href="{% url 'principal:evidencias' %}" class="stat yellow">
+        <span>En revisión</span><b>{{ ev_revision }}</b>
+      </a>
+      <a href="{% url 'principal:evidencias' %}" class="stat rose">
+        <span>Rechazadas</span><b>{{ ev_rechazadas }}</b>
+        {% if ev_rechazadas > 0 %}<small>Corregir →</small>{% endif %}
+      </a>
+    </div>
+  </article>
+
+  <!-- Tarjeta estática de Ajustes -->
+  <article class="card summary-card">
+    <h2 class="eyebrow normal-case">Ajustes de Desempeño</h2>
+    <div class="adjustments">
+      <div class="adjustment green">
+        <strong>+1 Felicitación</strong>
+        <span>Junta de vecinos<br>de ejemplo</span>
+        <b>+2,0% ponderado</b>
+      </div>
+      <div class="adjustment gray">
+        <strong>0 Reclamos<br>registrados</strong>
+        <b>0,0% penalización</b>
+      </div>
+    </div>
+  </article>
 </section>
-<section class="card goals-card"><div class="section-toolbar"><h2>Desglose de metas asignadas al cargo</h2><button class="button secondary" type="button" data-dialog-open="formula-dialog">Ver fórmula de cálculo</button><label class="search"><svg class="icon"><use href="#icon-search"/></svg><span class="sr-only">Buscar meta</span><input type="search" placeholder="Buscar" data-filter-input="metas"></label><button class="button secondary" type="button" data-demo-pending>☷ &nbsp; Filtrar</button></div>
-  <div class="table-wrap"><table class="goals-table"><thead><tr><th scope="col">Id</th><th scope="col">Ítem</th><th scope="col">Ponderado</th><th scope="col">Avance / Meta</th><th scope="col">Cumplimiento ponderado</th><th scope="col">Acción</th></tr></thead><tbody>{% for meta in metas %}<tr data-filter-item="metas"><td>{{ meta.id }}</td><td>{{ meta.nombre }}</td><td>{{ meta.ponderacion }}%</td><td><span class="mini-progress"><i style="width:{{ meta.barra }}%"></i></span>{{ meta.avance }}/{{ meta.meta }}</td><td>{{ meta.resultado }}%</td><td><button type="button" class="button mini" data-demo-pending>Ver registros</button></td></tr>{% endfor %}</tbody></table></div>
-  <div class="pagination" aria-label="Paginación de ejemplo"><button type="button" aria-label="Página anterior" data-demo-pending>‹</button><button class="current" type="button">1</button><button type="button" data-demo-pending>2</button><button type="button" data-demo-pending>3</button><span>…</span><button type="button" data-demo-pending>10</button><button type="button" aria-label="Página siguiente" data-demo-pending>›</button></div>
+
+<!-- TABLA DE METAS (Recuperada) -->
+<section class="card goals-card">
+  <div class="section-toolbar">
+    <h2>Desglose de metas asignadas al cargo</h2>
+    <button class="button secondary" type="button" data-dialog-open="formula-dialog">Ver fórmula de cálculo</button>
+    <label class="search">
+      <svg class="icon"><use href="#icon-search"/></svg>
+      <span class="sr-only">Buscar meta</span>
+      <input type="search" placeholder="Buscar" data-filter-input="metas">
+    </label>
+    <button class="button secondary" type="button" data-demo-pending>☷ &nbsp; Filtrar</button>
+  </div>
+  
+  <div class="table-wrap">
+    <table class="goals-table">
+      <thead>
+        <tr>
+          <th scope="col">Id</th>
+          <th scope="col">Ítem</th>
+          <th scope="col">Ponderado</th>
+          <th scope="col">Avance / Meta</th>
+          <th scope="col">Cumplimiento ponderado</th>
+          <th scope="col">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for meta in metas %}
+        <tr data-filter-item="metas">
+          <td>{{ meta.id }}</td>
+          <td>{{ meta.nombre }}</td>
+          <td>{{ meta.ponderacion }}%</td>
+          <td><span class="mini-progress"><i style="width:{{ meta.barra }}%"></i></span>{{ meta.avance }}/{{ meta.meta }}</td>
+          <td>{{ meta.resultado }}%</td>
+          <td><button type="button" class="button mini" data-demo-pending>Ver registros</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  
+  <div class="pagination" aria-label="Paginación de ejemplo">
+    <button type="button" aria-label="Página anterior" data-demo-pending>‹</button>
+    <button class="current" type="button">1</button>
+    <button type="button" data-demo-pending>2</button>
+    <span>…</span>
+    <button type="button" data-demo-pending>10</button>
+    <button type="button" aria-label="Página siguiente" data-demo-pending>›</button>
+  </div>
 </section>
-<section class="upcoming"><h2>Actividades por vencer</h2><div class="upcoming-grid">{% for compromiso in compromisos %}<article class="card upcoming-item"><div><span>{{ compromiso.titulo }}</span><b>{{ compromiso.plazo|upper }}</b></div><p>Territorio: {{ compromiso.territorio }}</p><a href="{% url 'principal:agenda' %}">Ver en agenda</a></article>{% endfor %}</div></section>
-<dialog id="formula-dialog" class="dialog"><div class="dialog-head"><h2>Fórmula de cálculo</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div><p><strong>Cumplimiento</strong> = avance aprobado ÷ meta × 100.</p><p><strong>Resultado ponderado</strong> = ponderador × cumplimiento ÷ 100, respetando el tope configurado.</p><p>Estos valores son ejemplos visuales y no se calculan todavía con datos guardados.</p></dialog>
+
+<!-- ACTIVIDADES POR VENCER (Modo Solo Lectura / Ejecución) -->
+<section class="upcoming">
+  <h2>Actividades asignadas por vencer</h2>
+  <div class="upcoming-grid">
+    {% for compromiso in compromisos_vencer %}
+    <article class="card upcoming-item" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <span>{{ compromiso.titulo|truncatechars:50 }}</span>
+        <b style="color: {% if compromiso.estado == 'En proceso' %}#eab308{% elif compromiso.estado == 'Atrasado' %}#ef4444{% else %}#3b82f6{% endif %};">
+          {{ compromiso.plazo|date:"d/m/Y" }}
+        </b>
+      </div>
+      <p style="margin: 0.5rem 0;">Territorio: {{ compromiso.territorio }}</p>
+      
+      <!-- NUEVO: El funcionario no edita el estado, solo es redirigido a cumplir la tarea -->
+      <a href="{% url 'principal:actividades' %}" class="button primary mini" style="text-align: center; margin-top: auto;">✚ Reportar evidencia</a>
+    </article>
+    {% empty %}
+    <div style="grid-column: 1 / -1; padding: 2rem; text-align: center; background: #f8fafc; border-radius: 8px; color: #64748b;">
+      No tienes actividades pendientes por vencer. ¡Excelente trabajo!
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<dialog id="formula-dialog" class="dialog">
+  <div class="dialog-head">
+    <h2>Fórmula de cálculo</h2>
+    <button type="button" data-dialog-close aria-label="Cerrar">×</button>
+  </div>
+  <p><strong>Cumplimiento</strong> = avance aprobado ÷ meta × 100.</p>
+  <p><strong>Resultado ponderado</strong> = ponderador × cumplimiento ÷ 100.</p>
+</dialog>
 {% endblock %}

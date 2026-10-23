@@ -14,4 +14,5 @@ urlpatterns = [
     path("equipo/", views.equipo, name="equipo"),
     path("verificacion/", views.verificacion, name="verificacion"),
     path("cerrar-sesion/", LogoutView.as_view(next_page="principal:inicio"), name="cerrar_sesion"),
+    path("administracion/", views.administracion, name="administracion"),
 ]
