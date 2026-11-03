@@ -6,8 +6,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}SGR{% endblock %} | Sistema de Gestión de Resultados</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
   <link rel="stylesheet" href="{% static 'css/estilos.css' %}">
   <script src="{% static 'js/principal.js' %}" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
 </head>
 
 <body class="app-page">
@@ -57,7 +60,6 @@
   <aside class="sidebar" aria-label="Navegación principal">
     <div class="brand" aria-hidden="true"></div>
     <nav class="sidebar-nav">
-      <!-- Solo los Funcionarios verán su Panel, Registro y Evidencias -->
       {% if puede_registrar_actividades %}
       <a href="{% url 'principal:panel' %}" class="nav-link {% if pagina == 'panel' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
@@ -81,7 +83,7 @@
       </a>
       {% endif %}
 
-      <!-- Ambos roles (Funcionario y Jefatura) verán la Agenda -->
+      
       {% if puede_ver_agenda %}
       <a href="{% url 'principal:agenda' %}" class="nav-link {% if pagina == 'agenda' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
@@ -91,7 +93,7 @@
       </a>
       {% endif %}
 
-      <!-- Solo la Jefatura verá su Panel de Equipo y Verificación -->
+      
       {% if puede_ver_equipo %}
       <a href="{% url 'principal:equipo' %}" class="nav-link {% if pagina == 'equipo' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
@@ -108,7 +110,7 @@
       </a>
       {% endif %}
       
-      <!-- Solo el Administrador verá este botón -->
+      
       {% if puede_administrar %}
       <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 1rem 0;">
       <a href="{% url 'principal:administracion' %}" class="nav-link {% if pagina == 'administracion' %}active{% endif %}">
@@ -156,27 +158,27 @@
     <main class="main-content">{% block content %}{% endblock %}</main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <!-- SCRIPT GLOBAL DE INTERFAZ -->
+
 <script>
   document.addEventListener("DOMContentLoaded", function() {
     
-    // 1. Motor de búsqueda en tiempo real para todas las pantallas
+    
     const searchInputs = document.querySelectorAll('input[data-filter-input]');
 
     searchInputs.forEach(input => {
       input.addEventListener('input', function() {
-        // Capturamos lo que el usuario escribe, en minúsculas
+        
         const term = this.value.toLowerCase().trim();
-        // Leemos a qué grupo de tarjetas afecta (ej: "evidencias" o "revision")
+        
         const filterName = this.dataset.filterInput; 
         
         const items = document.querySelectorAll(`[data-filter-item="${filterName}"]`);
         
         items.forEach(item => {
-          // Extraemos todo el texto visible de la fila o tarjeta
+          
           const text = item.textContent.toLowerCase();
           
-          // Si el texto incluye lo que escribimos, lo mostramos. Si no, lo ocultamos.
+          
           if (text.includes(term)) {
             item.style.display = '';
           } else {
@@ -186,7 +188,6 @@
       });
     });
 
-    // 2. Lógica visual para que las pestañas (Nuevas / Corregidas) en la vista de Jefatura se animen al hacer clic
     const reviewTabs = document.querySelectorAll('.review-tabs .button');
     reviewTabs.forEach(tab => {
       tab.addEventListener('click', function() {
