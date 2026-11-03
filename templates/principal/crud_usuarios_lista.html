@@ -1,0 +1,78 @@
+{% extends 'principal/base.html' %}
+{% block title %}Usuarios y Roles | SGR{% endblock %}
+
+{% block content %}
+<!-- Uso de grillas de Bootstrap: container-fluid, row, col -->
+<div class="container-fluid px-0">
+  <div class="row align-items-center mb-4">
+    <div class="col-md-8">
+      <h1 class="mb-1">Gestión de Usuarios y Roles</h1>
+      <p class="text-muted mb-0">Administración de accesos, perfiles, delegaciones y estado (HU-26)</p>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+      <a href="{% url 'principal:administracion' %}" class="btn btn-outline-secondary me-2">Configuración</a>
+      <a href="{% url 'principal:crear_usuario' %}" class="btn btn-danger" style="background-color: #ad0007;">✚ Nuevo Funcionario</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4 border-0 rounded-4">
+    <div class="card-header bg-light py-3 d-flex align-items-center">
+      <div class="input-group w-50">
+        <span class="input-group-text bg-white"><svg class="icon" style="width: 15px; height: 15px;"><use href="#icon-search"/></svg></span>
+        <input type="search" class="form-control border-start-0 ps-0" placeholder="Buscar por RUT o Nombre..." data-filter-input="usuarios">
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <!-- Clases Bootstrap: table, table-hover, align-middle -->
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light text-secondary">
+          <tr>
+            <th scope="col" class="ps-4">Nombre Completo</th>
+            <th scope="col">RUT / ID</th>
+            <th scope="col">Delegación</th>
+            <th scope="col">Rol / Cargo</th>
+            <th scope="col">Estado</th>
+            <th scope="col" class="text-end pe-4">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+          <tr data-filter-item="usuarios">
+            <td class="ps-4 fw-bold">{{ u.get_full_name|default:"Sin Nombre" }}</td>
+            <td>{{ u.username }}</td>
+            <td>{{ u.perfil.delegacion.nombre|default:"Sin delegación" }}</td>
+            <td>
+              {{ u.groups.first.name|default:"Sin Rol" }} <br>
+              <small class="text-muted">{{ u.perfil.cargo.nombre|default:"Sin Cargo" }}</small>
+            </td>
+            <td>
+              {% if u.is_active %}
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill">Activo</span>
+              {% else %}
+                  <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1 rounded-pill">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-4">
+              <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'principal:editar_usuario' u.id %}" class="btn btn-sm btn-outline-primary">Editar</a>
+                {% if u.is_active %}
+                <form method="post" action="{% url 'principal:desactivar_usuario' u.id %}" onsubmit="return confirm('¿Desactivar a este usuario? Mantendrá su historial intacto.');" class="m-0">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Desactivar</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center p-5 text-muted">No hay usuarios registrados en el sistema.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

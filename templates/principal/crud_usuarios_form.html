@@ -1,0 +1,109 @@
+{% extends 'principal/base.html' %}
+{% block title %}{{ accion }} Usuario | SGR{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+  <div class="row align-items-center mb-4">
+    <div class="col-md-9">
+      <h1 class="mb-1">{{ accion }} Funcionario</h1>
+      <p class="text-muted mb-0">Complete los datos de identidad y asigne los permisos operacionales.</p>
+    </div>
+    <div class="col-md-3 text-md-end mt-3 mt-md-0">
+      <a href="{% url 'principal:listar_usuarios' %}" class="btn btn-outline-secondary">← Volver al listado</a>
+    </div>
+  </div>
+
+  <form method="POST">
+    {% csrf_token %}
+    
+    {% if form.errors %}
+    <div class="alert alert-danger shadow-sm rounded-3" role="alert">
+        <strong>Error en la validación:</strong> Verifique los campos en rojo antes de continuar.
+    </div>
+    {% endif %}
+
+    
+    <div class="row g-4">
+      
+      
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 rounded-4 h-100">
+          <div class="card-body p-4">
+            <h5 class="card-title border-bottom pb-3 mb-4">Datos de Identidad</h5>
+            
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">RUT / ID *</label>
+                {{ form.username }}
+                <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Correo Institucional *</label>
+                {{ form.email }}
+                <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+              </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Nombres *</label>
+                {{ form.first_name }}
+                <div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">Apellidos *</label>
+                {{ form.last_name }}
+                <div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">Contraseña de Acceso</label>
+              {{ form.password }}
+              <div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>
+            </div>
+
+            <div class="form-check form-switch mt-4">
+              {{ form.is_active }}
+              <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">Usuario Activo (Permitir acceso)</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="col-lg-6">
+        <div class="card shadow-sm border-0 rounded-4 h-100">
+          <div class="card-body p-4 d-flex flex-column">
+            <h5 class="card-title border-bottom pb-3 mb-4">Asignación Operacional</h5>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">Rol en el Sistema *</label>
+              {{ form.grupo }}
+              <div class="form-text">Define los accesos en la barra lateral.</div>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">Delegación Territorial *</label>
+              {{ form.delegacion }}
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">Cargo Desempeñado *</label>
+              {{ form.cargo }}
+              <div class="form-text">Define las metas e indicadores a evaluar.</div>
+            </div>
+
+            
+            <div class="mt-auto pt-4 d-flex justify-content-end gap-2 border-top">
+              <a href="{% url 'principal:listar_usuarios' %}" class="btn btn-light px-4">Cancelar</a>
+              <button type="submit" class="btn btn-danger px-4" style="background-color: #ad0007;">Guardar {{ accion }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>
+{% endblock %}

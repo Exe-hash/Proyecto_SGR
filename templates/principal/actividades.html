@@ -1,97 +1,117 @@
 {% extends 'principal/base.html' %}
-{% block title %}Registrar actividad{% endblock %}
+{% block title %}Registrar actividad | SGR{% endblock %}
 
 {% block content %}
-<div class="page-heading">
-  <h1>Registrar Actividad Diaria</h1>
-  <p>Completa los datos para generar tu evidencia y código verificador</p>
-</div>
-
-<form id="activity-form" class="activity-form" method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  <section class="card form-card">
-    <div class="form-row">
-      <label>Fecha de Registro
-        <input type="date" name="fecha" value="{% now 'Y-m-d' %}" required>
-      </label>
-      
-      <!-- NUEVO: Selector de Meta conectado a la Base de Datos -->
-      <label class="grow">Meta a la que aporta *
-        <select name="meta_id" required>
-          <option value="">-- Seleccione una meta --</option>
-          {% for m in metas_reales %}
-            <option value="{{ m.id }}">{{ m.nombre }} (Vale un {{ m.ponderacion }}%)</option>
-          {% endfor %}
-        </select>
-      </label>
-      
-    </div>
-    <div class="form-row">
-      <label class="grow">Actividad / Solicitud / Problema
-        <textarea name="actividad" required></textarea>
-      </label>
-      <label class="grow">Acción Realizada
-        <textarea name="accion" required></textarea>
-      </label>
-    </div>
-  </section>
-
-  <section class="card form-card">
-    <div class="form-row">
-      <label class="grow">Nombre de contacto
-        <input type="text" name="contacto" maxlength="120">
-      </label>
-      <label class="grow">Teléfono (fono)
-        <input type="tel" name="telefono" maxlength="25">
-      </label>
-    </div>
-  </section>
-
-  <section class="card form-card">
-    <label class="checkbox-label">
-      <input type="checkbox" id="commitment-toggle" name="crear_compromiso" checked> 
-      Ingresar como compromiso a la agenda colectiva (Tubo de Trabajo)
-    </label>
-    <div class="form-row commitment-fields">
-      <label class="grow">Territorio
-        <select name="territorio">
-          {% for del in delegaciones %}
-            <option value="{{ del.id }}">{{ del.nombre }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label class="grow">Área de apoyo
-        <select name="area">
-          <option>Alumbrado público</option>
-          <option>Aseo y ornato</option>
-          <option>Tránsito</option>
-        </select>
-      </label>
-    </div>
-    <div class="form-row commitment-fields">
-      <label class="grow">Funcionario Responsable (ID o Nombre)
-        <input type="text" name="responsable" placeholder="Buscar funcionario…">
-      </label>
-      <label class="grow">Fecha Comprometida
-        <input type="date" name="fecha_comprometida" value="{% now 'Y-m-d' %}">
-      </label>
-    </div>
-  </section>
-
-  <section class="card form-card">
-    <label class="upload-zone" for="evidence-file">
-      <svg class="icon upload-icon"><use href="#icon-image"/></svg>
-      <strong>Arrastra aquí tu fotografía de evidencia o haz clic<br> para explorar tus archivos</strong>
-      <span>Formatos permitidos: JPG, PNG · Tamaño máx.: 5 MB</span>
-      <input id="evidence-file" type="file" name="fotografia" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
-      <small id="file-name" aria-live="polite"></small>
-    </label>
-    <p class="form-hint">ⓘ &nbsp;El código verificador único se generará al guardar de forma automática.</p>
-  </section>
-
-  <div class="form-actions">
-    <button class="button secondary" type="reset">Cancelar</button>
-    <button class="button primary" type="button" onclick="document.getElementById('activity-form').submit();">✓ &nbsp; Guardar Registro</button>
+<div class="container-fluid px-0">
+  <div class="mb-4">
+    <h1 class="mb-1">Registrar Actividad Diaria</h1>
+    <p class="text-muted">Completa los datos para generar tu evidencia y código verificador</p>
   </div>
-</form>
+
+  <form id="activity-form" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Fecha de Registro *</label>
+            <input type="date" name="fecha" class="form-control" value="{% now 'Y-m-d' %}" required>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label fw-bold">Meta a la que aporta *</label>
+            <select name="meta_id" class="form-select" required>
+              <option value="">-- Seleccione una meta --</option>
+              {% for m in metas_reales %}
+                <option value="{{ m.id }}">{{ m.nombre }} (Vale un {{ m.ponderacion }}%)</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Actividad / Solicitud / Problema *</label>
+            <textarea name="actividad" class="form-control" rows="3" required></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Acción Realizada *</label>
+            <textarea name="accion" class="form-control" rows="3" required></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <h6 class="fw-bold mb-3">Datos de Contacto (Opcional)</h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nombre de contacto</label>
+            <input type="text" name="contacto" class="form-control" maxlength="120">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Teléfono (fono)</label>
+            <input type="tel" name="telefono" class="form-control" maxlength="25">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4">
+        <div class="form-check form-switch mb-4">
+          <input class="form-check-input" type="checkbox" id="commitment-toggle" name="crear_compromiso" checked>
+          <label class="form-check-label fw-bold" for="commitment-toggle">Ingresar como compromiso a la agenda colectiva (Tubo de Trabajo)</label>
+        </div>
+        
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Territorio</label>
+            <select name="territorio" class="form-select">
+              {% for del in delegaciones %}
+                <option value="{{ del.id }}">{{ del.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Área de apoyo</label>
+            <select name="area" class="form-select">
+              <option>Alumbrado público</option>
+              <option>Aseo y ornato</option>
+              <option>Tránsito</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Funcionario Responsable</label>
+            <input type="text" name="responsable" class="form-control" placeholder="Buscar funcionario…">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Fecha Comprometida</label>
+            <input type="date" name="fecha_comprometida" class="form-control" value="{% now 'Y-m-d' %}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-body p-4 text-center">
+        <label class="form-label fw-bold d-block text-start">Fotografía de Evidencia *</label>
+        <div class="p-5 border border-2 border-primary border-opacity-50 border-dashed rounded-3 bg-light" style="border-style: dashed !important;">
+          <input id="evidence-file" type="file" name="fotografia" class="form-control" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
+          <small class="text-muted mt-2 d-block">Formatos permitidos: JPG, PNG · Tamaño máx.: 5 MB</small>
+        </div>
+        <p class="text-muted small mt-3 text-start">ⓘ El código verificador único se generará automáticamente al guardar.</p>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+      <button type="reset" class="btn btn-light px-4">Cancelar</button>
+      <button type="button" class="btn btn-danger px-4" style="background-color: #ad0007;" onclick="document.getElementById('activity-form').submit();">✓ Guardar Registro</button>
+    </div>
+  </form>
+</div>
 {% endblock %}

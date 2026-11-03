@@ -1,114 +1,136 @@
 {% extends 'principal/base.html' %}
-{% block title %}Mis evidencias{% endblock %}
+{% block title %}Mis evidencias | SGR{% endblock %}
 
 {% block content %}
-<div class="heading-row">
-  <div class="page-heading">
-    <h1>Historial de Mis Evidencias</h1>
-    <p>Consulta el estado, observaciones y el historial<br>de todas las evidencias enviadas</p>
+<div class="container-fluid px-0">
+  <div class="row align-items-center mb-4">
+    <div class="col-md-8">
+      <h1 class="mb-1">Historial de Mis Evidencias</h1>
+      <p class="text-muted mb-0">Consulta el estado, observaciones y el historial de todas las evidencias enviadas</p>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end gap-2">
+      <input type="search" class="form-control w-auto" placeholder="Buscar por código..." data-filter-input="evidencias">
+      <a href="{% url 'principal:actividades' %}" class="btn btn-danger text-nowrap" style="background-color: #ad0007;">＋ Nueva Evidencia</a>
+    </div>
   </div>
-  <div class="heading-actions">
-    <label class="search">
-      <svg class="icon"><use href="#icon-search"/></svg>
-      <span class="sr-only">Buscar evidencia</span>
-      <input type="search" placeholder="Buscar por código o actividad" data-filter-input="evidencias">
-    </label>
-    <a href="{% url 'principal:actividades' %}" class="button primary">＋ &nbsp; Nueva Evidencia</a>
+
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100">
+        <h6 class="text-muted fw-bold">Enviadas Totales</h6>
+        <h2 class="display-5 fw-bold mb-0 text-dark">{{ totales }}</h2>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100">
+        <h6 class="text-success fw-bold">Aprobadas</h6>
+        <h2 class="display-5 fw-bold mb-0 text-success">{{ aprobadas }}</h2>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100">
+        <h6 class="text-danger fw-bold">Pendientes / Rechazadas</h6>
+        <h2 class="display-5 fw-bold mb-0 text-danger">{{ pendientes }}</h2>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-4 mb-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4">Fecha</th>
+            <th>Código</th>
+            <th>Actividad</th>
+            <th>Estado</th>
+            <th class="text-end pe-4">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in evidencias_reales %}
+          <tr data-filter-item="evidencias">
+            <td class="ps-4">{{ e.fecha_registro|date:"d/m/Y" }}</td>
+            <td class="fw-bold">{{ e.codigo }}</td>
+            <td>{{ e.solicitud|truncatechars:45 }}</td>
+            <td>
+              {% if e.estado == 'Aprobada' %}
+                <span class="badge bg-success">Aprobada</span>
+              {% elif e.estado == 'Rechazada' %}
+                <span class="badge bg-danger">Rechazada</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">En Revisión</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-4">
+              <button type="button" class="btn btn-sm btn-outline-primary" data-evidence-detail 
+                data-code="{{ e.codigo }}" 
+                data-title="{{ e.solicitud }}" 
+                data-status="{% if e.estado == 'En revisión' %}Sin revisión{% else %}{{ e.estado }}{% endif %}" 
+                data-observation="{% if e.observacion %}{{ e.observacion }}{% else %}Esperando revisión de jefatura{% endif %}"
+                data-reviewer="{% if e.revisor %}{{ e.revisor.get_full_name|default:e.revisor.username }}{% else %}Aún no evaluado{% endif %}"
+                data-reviewdate="{% if e.fecha_revision %}{{ e.fecha_revision|date:'d/m/Y - H:i' }}{% else %}Pendiente{% endif %}">
+                Ver Detalle
+              </button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center p-5 text-muted">Aún no has registrado ninguna evidencia en el sistema.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-<section class="metric-row" aria-label="Resumen de evidencias">
-  <article class="card metric"><h2>Enviadas Totales</h2><strong>{{ totales }}</strong></article>
-  <article class="card metric"><h2>Aprobadas</h2><strong>{{ aprobadas }}</strong></article>
-  <article class="card metric"><h2>Pendientes / Rechazadas</h2><strong>{{ pendientes }}</strong></article>
-</section>
-
-<section class="card evidence-list" aria-label="Listado de evidencias">
-  {% for e in evidencias_reales %}
-  <article class="evidence-row" data-filter-item="evidencias">
-    <span>{{ e.fecha_registro|date:"d/m/Y" }}</span>
-    <strong>{{ e.codigo }}</strong>
-    <span>{{ e.solicitud|truncatechars:45 }}</span>
-    
-    <!-- Lógica de la píldora de color dinámico -->
-    <span class="status-pill {% if e.estado == 'Aprobada' %}aprobada{% elif e.estado == 'Rechazada' %}rechazada{% else %}corregir{% endif %}">
-  <i></i>{{ e.estado }}
-</span>
-    
-    <!-- NUEVO: Mostrar la observación real o el texto por defecto -->
-    <span class="observacion-texto">
-      {% if e.observacion %}
-        {{ e.observacion }}
-      {% else %}
-        Esperando revisión de jefatura
-      {% endif %}
-    </span>
-    
-    <!-- NUEVO: Inyectamos la observación real en el data-attribute para que el botón "Ver Detalle" la lea -->
-    <!-- NUEVO: Botón con los datos de trazabilidad inyectados -->
-    <button type="button" class="button outline" data-evidence-detail 
-      data-code="{{ e.codigo }}" 
-      data-title="{{ e.solicitud }}" 
-      data-status="{% if e.estado == 'En revisión' %}Sin revisión{% else %}{{ e.estado }}{% endif %}" 
-      data-observation="{% if e.observacion %}{{ e.observacion }}{% else %}Esperando revisión de jefatura{% endif %}"
-      data-reviewer="{% if e.revisor %}{{ e.revisor.get_full_name|default:e.revisor.username }}{% else %}Aún no evaluado{% endif %}"
-      data-reviewdate="{% if e.fecha_revision %}{{ e.fecha_revision|date:'d/m/Y - H:i' }}{% else %}Pendiente{% endif %}">Ver Detalle
-    </button>
-  </article>
-  {% empty %}
-    <div style="padding: 2.5rem; text-align: center; color: #6b7280;">Aún no has registrado ninguna evidencia en el sistema.</div>
-  {% endfor %}
-</section>
-
-
-<dialog id="evidence-dialog" class="dialog" style="padding: 2rem; border-radius: 12px; border: 1px solid #cbd5e1; max-width: 500px; width: 100%;">
-  <div class="dialog-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-    <h2 style="margin: 0;">Detalle de evidencia</h2>
-    <button type="button" id="dialog-close-btn" aria-label="Cerrar" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+<div class="modal fade" id="evidenceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Detalle de evidencia</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1"><strong>Código:</strong> <span id="evidence-code"></span></p>
+        <p class="mb-1"><strong>Actividad:</strong> <span id="evidence-title"></span></p>
+        <p class="mb-3"><strong>Estado:</strong> <span id="evidence-status" class="fw-bold"></span></p>
+        
+        <div class="bg-light p-3 rounded-3 border">
+          <p class="mb-0"><strong>Observación de Jefatura:</strong><br> <span id="evidence-observation"></span></p>
+          <hr>
+          <div class="d-flex justify-content-between small text-muted">
+            <span><strong>Revisado por:</strong> <span id="evidence-reviewer"></span></span>
+            <span><strong>Fecha:</strong> <span id="evidence-reviewdate"></span></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-top-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
   </div>
-  
-  <p><strong>Código:</strong> <span id="evidence-code"></span></p>
-  <p><strong>Actividad:</strong> <span id="evidence-title"></span></p>
-  <p><strong>Estado:</strong> <span id="evidence-status" style="font-weight: bold;"></span></p>
-  
-  <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-top: 1rem; border: 1px solid #e2e8f0;">
-    <p style="margin-top: 0;"><strong>Observación:</strong> <span id="evidence-observation"></span></p>
-    <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 1rem 0;">
-    <p style="margin: 0; font-size: 0.9rem; color: #475569;">
-      <strong>Revisado por:</strong> <span id="evidence-reviewer"></span><br>
-      <strong>Fecha:</strong> <span id="evidence-reviewdate"></span>
-    </p>
-  </div>
-</dialog>
+</div>
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {
     const detailBtns = document.querySelectorAll('[data-evidence-detail]');
-    const dialog = document.getElementById('evidence-dialog');
-    const closeBtn = document.getElementById('dialog-close-btn');
+    
+    const evidenceModal = new bootstrap.Modal(document.getElementById('evidenceModal'));
 
     detailBtns.forEach(btn => {
       btn.addEventListener('click', function() {
-        // Llenar los datos de la evidencia
         document.getElementById('evidence-code').textContent = this.dataset.code;
         document.getElementById('evidence-title').textContent = this.dataset.title;
         document.getElementById('evidence-status').textContent = this.dataset.status;
         document.getElementById('evidence-observation').textContent = this.dataset.observation;
-        
-        // Llenar los datos de trazabilidad
         document.getElementById('evidence-reviewer').textContent = this.dataset.reviewer;
         document.getElementById('evidence-reviewdate').textContent = this.dataset.reviewdate;
         
-        // Abrir el modal nativo de HTML5
-        dialog.showModal();
+        evidenceModal.show();
       });
     });
-
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        dialog.close();
-      });
-    }
   });
 </script>
 {% endblock %}

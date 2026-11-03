@@ -1,68 +1,106 @@
 {% extends 'principal/base.html' %}
-{% block title %}Resumen de equipo{% endblock %}
+{% block title %}Resumen de equipo | SGR{% endblock %}
 
 {% block content %}
-<h1 class="sr-only">Resumen de equipo</h1>
+<div class="container-fluid px-0">
+  <h1 class="mb-4">Resumen y Desempeño del Equipo</h1>
 
-<section class="summary-grid team-summary" aria-label="Indicadores del equipo">
-  <article class="card summary-card">
-    <h2>Evidencias Aprobadas</h2>
-    <strong class="big-number" style="color: #10b981;">{{ total_aprobadas }}</strong>
-    <p class="team-delta">Total validadas por jefatura</p>
-  </article>
-  
-  <article class="card summary-card">
-    <h2>Avance Global del Equipo</h2>
-    <div class="gauge" aria-label="{{ avance_global }} por ciento completado">
-      <div class="gauge-arc" style="--gauge:{{ avance_global }}%"></div>
-      <div class="gauge-value">{{ avance_global }}%</div>
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">Evidencias Aprobadas</h6>
+        <h2 class="display-4 fw-bold text-success mb-2">{{ total_aprobadas }}</h2>
+        <span class="badge bg-success bg-opacity-10 text-success align-self-start py-2">Total validadas por jefatura</span>
+      </div>
     </div>
-    <p class="center">Cumplimiento promedio</p>
-  </article>
-  
-  <article class="card summary-card">
-    <h2>Volumen de Actividad</h2>
-    <div class="activity-totals">
-      <span><strong>{{ total_general }}</strong> Registradas</span>
-      <span><strong>{{ total_revision }}</strong> En revisión</span>
+    
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">Avance Global del Equipo</h6>
+        <div class="text-center my-3">
+          <h2 class="display-4 fw-bold mb-0 text-primary">{{ avance_global }}%</h2>
+          <small class="text-muted">Cumplimiento promedio ponderado</small>
+        </div>
+        <div class="progress" style="height: 8px;">
+          <div class="progress-bar bg-primary" role="progressbar" style="width: {{ avance_global }}%;"></div>
+        </div>
+      </div>
     </div>
-  </article>
-</section>
-
-<section class="card team-list">
-  <div class="heading-row">
-    <h2>Estado y Desempeño del Equipo <span class="quiet">({% now "d M Y" %})</span></h2>
-    <div class="heading-actions">
-      <label class="search">
-        <svg class="icon"><use href="#icon-search"/></svg>
-        <span class="sr-only">Buscar en equipo</span>
-        <input type="search" placeholder="Buscar …" data-filter-input="equipo">
-      </label>
-      <button type="button" class="button primary" data-demo-pending>
-        <svg class="icon"><use href="#icon-download"/></svg> Exportar Informe
-      </button>
+    
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">Volumen de Actividad</h6>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div class="text-center">
+            <h3 class="fw-bold mb-0 text-dark">{{ total_general }}</h3>
+            <span class="text-muted small">Registradas</span>
+          </div>
+          <div class="text-center">
+            <h3 class="fw-bold mb-0 text-warning">{{ total_revision }}</h3>
+            <span class="text-muted small">En revisión</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-  
-  {% for p in equipo %}
-  <article class="team-row" data-filter-item="equipo">
-    <span class="avatar">{{ p.iniciales }}</span>
-    <div class="team-name">
-      <strong>{{ p.nombre }}</strong>
-      <small>({{ p.cargo }})</small>
+
+  <div class="card shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom">
+      <h5 class="mb-0 fw-bold">Estado del Equipo <span class="text-muted fw-normal fs-6">({% now "d M Y" %})</span></h5>
+      <div class="d-flex gap-2 mt-2 mt-md-0">
+        <input type="search" class="form-control form-control-sm" placeholder="Buscar en equipo..." data-filter-input="equipo">
+        <button class="btn btn-outline-primary btn-sm text-nowrap">Exportar Informe</button>
+      </div>
     </div>
-    <span class="status-pill {{ p.clase }}"><i></i>{{ p.estado }}</span>
-    <div class="team-progress">
-      <div><span>{{ p.porcentaje }}%</span><span>/60%</span></div>
-      <span class="mini-progress {{ p.clase }}"><i style="width:{{ p.barra }}%"></i></span>
+    
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4">Funcionario</th>
+            <th>Estado</th>
+            <th>Avance Total</th>
+            <th>Última Actividad</th>
+            <th class="text-end pe-4">Análisis</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in equipo %}
+          <tr data-filter-item="equipo">
+            <td class="ps-4">
+              <div class="d-flex align-items-center gap-3">
+                <div class="bg-secondary bg-opacity-25 rounded-circle d-flex align-items-center justify-content-center fw-bold text-secondary" style="width: 40px; height: 40px;">
+                  {{ p.iniciales }}
+                </div>
+                <div>
+                  <strong class="d-block">{{ p.nombre }}</strong>
+                  <small class="text-muted">{{ p.cargo }}</small>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="badge rounded-pill {% if p.estado == 'Activo' %}bg-success{% else %}bg-secondary{% endif %}">{{ p.estado }}</span>
+            </td>
+            <td>
+              <div class="d-flex justify-content-between small mb-1">
+                <span>{{ p.porcentaje }}%</span>
+                <span class="text-muted">/ 60%</span>
+              </div>
+              <div class="progress" style="height: 6px;">
+                <div class="progress-bar {% if p.porcentaje < 50 %}bg-danger{% elif p.porcentaje < 80 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ p.barra }}%;"></div>
+              </div>
+            </td>
+            <td><small class="text-muted">Registro validado por sistema</small></td>
+            <td class="text-end pe-4"><button class="btn btn-sm btn-light">Ver Perfil</button></td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center p-5 text-muted">Aún no hay funcionarios registrados en el equipo.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <span class="last-activity">Registro validado por sistema</span>
-    <button type="button" class="button outline" data-demo-pending>Ver Análisis <svg class="icon"><use href="#icon-arrow"/></svg></button>
-  </article>
-  {% empty %}
-  <div style="padding: 2rem; text-align: center; color: #64748b;">
-    Aún no hay funcionarios registrados en el equipo.
   </div>
-  {% endfor %}
-</section>
+</div>
 {% endblock %}

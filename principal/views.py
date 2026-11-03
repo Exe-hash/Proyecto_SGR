@@ -13,6 +13,12 @@ import uuid
 from .models import Evidencia, Compromiso, Delegacion, Observacion
 from .models import Meta
 
+from django.db import transaction
+from django.contrib.auth.models import User, Group
+from .forms import UsuarioCRUDForm
+from django.urls import reverse_lazy
+from django.contrib.auth.models import User
+
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
     return (
@@ -49,33 +55,14 @@ def contexto_usuario(request, **contexto):
 
     contexto.update(
         {
-            "puede_registrar_actividades": usuario_tiene_rol(
-                request.user, "Funcionario"
-            ),
-            "puede_ver_agenda": usuario_tiene_rol(
-                request.user, "Funcionario", "Jefatura"
-            ),
-            "puede_ver_equipo": usuario_tiene_rol(
-                request.user, "Jefatura"
-            ),
-            "puede_verificar_evidencias": usuario_tiene_rol(
-                request.user, "Verificador"
-            ),
-            "puede_administrar": usuario_tiene_rol(
-                request.user, "Administrador"
-            ),
-            "nombre_usuario": (
-                request.user.get_full_name().strip()
-                or request.user.get_username()
-            ),
-            "cargo_usuario": (
-                perfil.cargo.nombre if perfil else "Sin cargo asignado"
-            ),
-            "delegacion_usuario": (
-                perfil.delegacion.nombre
-                if perfil
-                else "Sin delegación asignada"
-            ),
+            "puede_registrar_actividades": usuario_tiene_rol(request.user, "Funcionario"),
+            "puede_ver_agenda": usuario_tiene_rol(request.user, "Funcionario", "Supervisor"),
+            "puede_ver_equipo": usuario_tiene_rol(request.user, "Supervisor"),
+            "puede_verificar_evidencias": usuario_tiene_rol(request.user, "Supervisor"),
+            "puede_administrar": usuario_tiene_rol(request.user, "Administrador"),
+            "nombre_usuario": (request.user.get_full_name().strip() or request.user.get_username()),
+            "cargo_usuario": perfil.cargo.nombre if perfil else "Sin cargo asignado",
+            "delegacion_usuario": perfil.delegacion.nombre if perfil else "Sin delegación asignada",
         }
     )
 
@@ -105,12 +92,11 @@ def inicio(request):
         if usuario is not None:
             login(request, usuario)
             
-            # --- NUEVA LÓGICA DE REDIRECCIÓN DINÁMICA ---
-            if usuario_tiene_rol(usuario, "Jefatura"):
-                # Si es jefe, aterriza en el resumen de su equipo
+            if usuario_tiene_rol(usuario, "Administrador"):
+                return redirect("principal:administracion")
+            elif usuario_tiene_rol(usuario, "Supervisor"):
                 return redirect("principal:equipo")
             else:
-                # Si es funcionario, aterriza en sus propias metas
                 return redirect("principal:panel")
             # --------------------------------------------
 
@@ -123,10 +109,8 @@ def inicio(request):
     return render(request, "principal/inicio.html")
 
 
-# Asegúrate de que esta importación siga arriba en tu archivo:
-# from .datos_demo import METAS, COMPROMISOS, EQUIPO, EVIDENCIAS
 
-@requiere_roles("Funcionario", "Jefatura", "Verificador")
+@requiere_roles("Funcionario", "Supervisor")
 def panel(request):
     mis_evidencias = Evidencia.objects.filter(funcionario=request.user)
     ev_aprobadas = mis_evidencias.filter(estado="Aprobada").count()
@@ -172,7 +156,7 @@ def panel(request):
             "ev_rechazadas": ev_rechazadas,
             "porcentaje_avance": porcentaje_avance,
             "compromisos_vencer": compromisos_vencer,
-            "metas": metas_calculadas, # REEMPLAZAMOS DATOS FALSOS POR LA MATEMÁTICA REAL
+            "metas": metas_calculadas, 
         },
     )
 
@@ -187,7 +171,6 @@ def actividades(request):
         telefono = request.POST.get("telefono")
         fotografia = request.FILES.get("fotografia")
         
-        # CAPTURAMOS LA META ELEGIDA
         meta_id = request.POST.get("meta_id") 
 
         codigo_evi = f"EVI-{uuid.uuid4().hex[:5].upper()}"
@@ -201,7 +184,7 @@ def actividades(request):
             contacto_nombre=contacto,
             contacto_telefono=telefono,
             fotografia=fotografia,
-            meta_relacionada_id=meta_id # LO GUARDAMOS EN LA BBDD
+            meta_relacionada_id=meta_id 
         )
 
         if request.POST.get("crear_compromiso") == "on":
@@ -230,27 +213,24 @@ def actividades(request):
         {
             "pagina": "actividades",
             "delegaciones": Delegacion.objects.all(),
-            # ENVIAMOS LAS METAS VIGENTES AL FORMULARIO
+            
             "metas_reales": Meta.objects.filter(vigente=True), 
         },
     )
 
 
-@requiere_roles("Funcionario", "Jefatura")
+@requiere_roles("Funcionario", "Supervisor")
 def agenda(request):
-    # 1. Si enviamos el formulario desde el cajón lateral (UPDATE)
     if request.method == "POST":
         codigo_recibido = request.POST.get("codigo")
         nuevo_estado = request.POST.get("nuevo_estado")
         nuevo_texto = request.POST.get("observacion")
         
         if codigo_recibido and nuevo_estado:
-            # Actualizamos el estado del compromiso
             compromiso = Compromiso.objects.get(codigo=codigo_recibido)
             compromiso.estado = nuevo_estado
             compromiso.save()
             
-            # Si el usuario escribió una observación, la guardamos
             if nuevo_texto:
                 Observacion.objects.create(
                     compromiso=compromiso,
@@ -258,10 +238,8 @@ def agenda(request):
                     texto=nuevo_texto
                 )
             
-        # Recargamos la página para limpiar el formulario y ver los cambios
         return redirect("principal:agenda")
 
-    # 2. Si entramos a la página normalmente a mirar el tablero (GET)
     compromisos_reales = Compromiso.objects.all()
     
     return renderizar(
@@ -276,10 +254,8 @@ def agenda(request):
 
 @requiere_roles("Funcionario")
 def evidencias(request):
-    # 1. Traer SOLO las evidencias de este usuario desde MySQL
     mis_evidencias = Evidencia.objects.filter(funcionario=request.user)
     
-    # 2. Calcular los números para las cajas de resumen
     totales = mis_evidencias.count()
     aprobadas = mis_evidencias.filter(estado="Aprobada").count()
     pendientes = totales - aprobadas
@@ -299,7 +275,7 @@ def evidencias(request):
 
 from django.contrib.auth.models import User
 
-@requiere_roles("Jefatura", "Administrador")
+@requiere_roles("Supervisor", "Administrador")
 def equipo(request):
     todas_evidencias = Evidencia.objects.all()
     total_aprobadas = todas_evidencias.filter(estado="Aprobada").count()
@@ -349,23 +325,19 @@ def equipo(request):
     )
 
 
-@requiere_roles("Jefatura", "Verificador", "Administrador")
+@requiere_roles("Supervisor")
 def verificacion(request):
     if request.method == "POST":
-        # 1. Leemos los datos exactos que envía tu JavaScript
         codigo_evi = request.POST.get("codigo") 
         nuevo_estado = request.POST.get("nuevo_estado")
         
-        # 2. Buscamos la evidencia por su código (ej: EVI-123)
         evidencia = Evidencia.objects.get(codigo=codigo_evi)
         
-        # 3. Guardamos el estado (Aprobada, Rechazada o Corregir)
         evidencia.estado = nuevo_estado
         evidencia.save()
         
         return redirect("principal:verificacion")
         
-    # GET: Mostrar solo las que faltan por revisar
     pendientes = Evidencia.objects.filter(estado="En revisión")
     
     return renderizar(
@@ -374,16 +346,16 @@ def verificacion(request):
         {
             "pagina": "verificacion",
             "evidencias": pendientes,
-            "total_pendientes": pendientes.count() # Enviamos el total para tu HTML
+            "total_pendientes": pendientes.count()
         }
     )
 
-from .models import Meta # Asegúrate de tener esto arriba, o déjalo aquí adentro si quieres hacerlo rápido
+from .models import Meta 
 
 @requiere_roles("Administrador")
 def administracion(request):
     if request.method == "POST":
-        # 1. Crear nueva meta
+        
         if "crear_meta" in request.POST:
             Meta.objects.create(
                 nombre=request.POST.get("nombre"),
@@ -391,7 +363,7 @@ def administracion(request):
                 ponderacion=request.POST.get("ponderacion")
             )
         
-        # 2. Editar meta existente
+
         elif "editar_meta" in request.POST:
             meta_id = request.POST.get("meta_id")
             meta = Meta.objects.get(id=meta_id)
@@ -400,15 +372,18 @@ def administracion(request):
             meta.ponderacion = request.POST.get("ponderacion")
             meta.save()
             
-        # 3. Eliminar meta
+        
         elif "eliminar_meta" in request.POST:
             meta_id = request.POST.get("meta_id")
             Meta.objects.filter(id=meta_id).delete()
 
         return redirect("principal:administracion")
             
-    # GET: Traer las metas reales de MySQL
+    
     metas_reales = Meta.objects.all().order_by('-id')
+    
+    
+    usuarios = User.objects.all().select_related('perfil')
     
     return renderizar(
         request,
@@ -416,5 +391,61 @@ def administracion(request):
         {
             "pagina": "administracion",
             "metas_reales": metas_reales,
+            "usuarios": usuarios,
         },
     )
+
+
+@requiere_roles("Administrador")
+def listar_usuarios(request):
+    """Muestra el catálogo de usuarios sin usar Django Admin."""
+    usuarios = User.objects.select_related('perfil__delegacion', 'perfil__cargo').prefetch_related('groups').all().order_by('-is_active', 'first_name')
+    return renderizar(request, "principal/crud_usuarios_lista.html", {"usuarios": usuarios, "pagina": "administracion"})
+
+@requiere_roles("Administrador")
+@transaction.atomic
+def crear_usuario(request):
+    """Crea un usuario, asigna rol y perfil en una sola transacción atómica."""
+    if request.method == "POST":
+        form = UsuarioCRUDForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("principal:listar_usuarios")
+    else:
+        form = UsuarioCRUDForm()
+    
+    return renderizar(request, "principal/crud_usuarios_form.html", {"form": form, "accion": "Crear", "pagina": "administracion"})
+
+@requiere_roles("Administrador")
+@transaction.atomic
+def editar_usuario(request, usuario_id):
+    """Modifica datos, grupo o delegación de un usuario existente."""
+    usuario = User.objects.get(id=usuario_id)
+    
+    
+    datos_iniciales = {}
+    if hasattr(usuario, 'perfil'):
+        datos_iniciales['delegacion'] = usuario.perfil.delegacion
+        datos_iniciales['cargo'] = usuario.perfil.cargo
+    if usuario.groups.exists():
+        datos_iniciales['grupo'] = usuario.groups.first()
+
+    if request.method == "POST":
+        form = UsuarioCRUDForm(request.POST, instance=usuario)
+        if form.is_valid():
+            form.save()
+            return redirect("principal:listar_usuarios")
+    else:
+        form = UsuarioCRUDForm(instance=usuario, initial=datos_iniciales)
+
+    return renderizar(request, "principal/crud_usuarios_form.html", {"form": form, "accion": "Editar", "pagina": "administracion"})
+
+@requiere_roles("Administrador")
+def desactivar_usuario(request, usuario_id):
+    """Soft Delete: Desactiva al usuario para no perder registros históricos (HU-26)."""
+    usuario = User.objects.get(id=usuario_id)
+    
+    if usuario != request.user:
+        usuario.is_active = False
+        usuario.save()
+    return redirect("principal:listar_usuarios")
