@@ -1,0 +1,324 @@
+{% extends 'principal/base.html' %}
+{% block title %}Área Social | SGR{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+  <!-- Encabezado de la página -->
+  <div class="row mb-4 align-items-end">
+    <div class="col-md-8">
+      <h1 class="mb-1">Historial de Atenciones</h1>
+      <p class="text-muted mb-0">Gestión de casos sociales, orientaciones y derivaciones</p>
+    </div>
+  </div>
+
+  <!-- Contenedor Principal -->
+  <div class="card shadow-sm border-0 rounded-4 mb-4">
+    
+    <!-- Barra de Herramientas: Filtros y Botón de Acción -->
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom gap-3">
+      
+      <!-- Filtros -->
+      <div class="d-flex flex-wrap gap-3 align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <label class="text-muted fw-bold small mb-0">Filtros:</label>
+          <select class="form-select bg-light border-0 shadow-none text-secondary" style="min-width: 140px;" name="filtro_fecha">
+            <option value="" selected>Mes/Año</option>
+            <option value="07-2026">Julio 2026</option>
+            <option value="08-2026">Agosto 2026</option>
+          </select>
+          <select class="form-select bg-light border-0 shadow-none text-secondary" style="min-width: 160px;" name="filtro_tipo">
+            <option value="" selected>Tipo Atención</option>
+            <option value="orientacion">Orientación Soc.</option>
+            <option value="informe">Informe Aporte</option>
+          </select>
+        </div>
+
+        <div class="input-group" style="max-width: 300px;">
+          <span class="input-group-text bg-light border-end-0 text-muted">
+            <svg class="icon" style="width: 16px; height: 16px;"><use href="#icon-search"/></svg>
+          </span>
+          <input type="search" class="form-control bg-light border-start-0 ps-0 shadow-none" placeholder="Buscar por RUT...">
+        </div>
+      </div>
+
+      <!-- Botón Nuevo Caso (Abre modal modalNuevoExpediente) -->
+      <button class="btn btn-danger fw-bold shadow-sm" style="background-color: #ad0007; border-color: #ad0007;" data-bs-toggle="modal" data-bs-target="#modalNuevoExpediente">
+        ✚ Nuevo Caso Social
+      </button>
+    </div>
+
+    <!-- Tabla de Datos -->
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light text-secondary">
+          <tr>
+            <th scope="col" class="ps-4">Fecha ingreso</th>
+            <th scope="col">RUT</th>
+            <th scope="col">Usuario</th>
+            <th scope="col">Tipo atención</th>
+            <th scope="col">Gestiones</th>
+            <th scope="col" class="text-end pe-4">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for caso in casos %}
+          <tr>
+            <td class="ps-4">{{ caso.fecha_ingreso|date:"d/m/Y" }}</td>
+            <td class="fw-bold">{{ caso.rut }}</td>
+            <td>{{ caso.usuario_nombre }}</td>
+            <td>{{ caso.tipo_atencion }}</td>
+            <td>
+              <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1 rounded-pill">
+                {{ caso.gestiones_realizadas }} de {{ caso.gestiones_maximas|default:"3" }}
+              </span>
+            </td>
+            <td class="text-end pe-4">
+              <!-- Botón Ver/Editar Caso (Abre modal dinámico) -->
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalExpediente{{ caso.id }}">Ver / Editar</button>
+            </td>
+          </tr>
+
+          <!-- ========================================== -->
+          <!-- MODAL 2: VER / EDITAR EXPEDIENTE (Dentro del For) -->
+          <!-- ========================================== -->
+          <div class="modal fade" id="modalExpediente{{ caso.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+              <div class="modal-content border-0 shadow rounded-4">
+                
+                <div class="modal-header border-bottom-0 pb-0">
+                  <h5 class="modal-title fw-bold text-dark">Expediente Social - Edición</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form method="post" action="{% url 'principal:editar_caso_social' %}">
+                  {% csrf_token %}
+                  <!-- INPUT OCULTO: ID DEL CASO PARA EL BACKEND -->
+                  <input type="hidden" name="caso_id" value="{{ caso.id }}">
+
+                  <div class="modal-body pt-3">
+                    
+                    <!-- Datos del ciudadano -->
+                    <h6 class="fw-bold text-secondary mb-3 pb-2 border-bottom">Datos del ciudadano</h6>
+                    <div class="row g-3 mb-4">
+                      <div class="col-md-4">
+                        <label class="form-label text-muted small mb-1">RUT</label>
+                        <input type="text" name="rut" class="form-control bg-light border-0" value="{{ caso.rut }}" readonly>
+                      </div>
+                      <div class="col-md-8">
+                        <label class="form-label text-muted small mb-1">Nombre Completo</label>
+                        <input type="text" name="usuario_nombre" class="form-control bg-light border-0" value="{{ caso.usuario_nombre }}" readonly>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label text-muted small mb-1">Teléfono</label>
+                        <input type="text" name="telefono" class="form-control" value="{{ caso.telefono }}">
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label text-muted small mb-1">Sub Atención</label>
+                        <select name="sub_atencion" class="form-select">
+                          <option value="Orientacion Social" {% if caso.sub_atencion == 'Orientacion Social' %}selected{% endif %}>Orientación Social</option>
+                          <option value="Informe Institucional" {% if caso.sub_atencion == 'Informe Institucional' %}selected{% endif %}>Informe Institucional</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Flujo de Gestiones -->
+                    <div class="d-flex justify-content-between align-items-end border-bottom pb-2 mb-3">
+                      <h6 class="fw-bold text-secondary mb-0">Flujo de Gestiones</h6>
+                      <small class="text-muted">Máximo 3 atenciones por usuario</small>
+                    </div>
+
+                    <ul class="nav nav-pills mb-3 gap-2" id="gestiones-tab{{ caso.id }}" role="tablist">
+                      <li class="nav-item" role="presentation">
+                        <button class="nav-link active py-1 px-3 border border-primary text-primary bg-primary bg-opacity-10" id="gestion1-tab{{ caso.id }}" data-bs-toggle="tab" data-bs-target="#gestion1_{{ caso.id }}" type="button" role="tab">Gestión Actual</button>
+                      </li>
+                    </ul>
+
+                    <div class="tab-content bg-light bg-opacity-50 border rounded-3 p-3 mb-4" id="gestionesTabContent{{ caso.id }}">
+                      <div class="tab-pane fade show active" id="gestion1_{{ caso.id }}" role="tabpanel">
+                        <div class="row g-3">
+                          <div class="col-md-8">
+                            <label class="form-label fw-bold small mb-1">Acción Realizada</label>
+                            <select name="accion_realizada" class="form-select shadow-none">
+                              <option value="Emergencia">Emergencia</option>
+                              <option value="Visita a Terreno">Visita a Terreno</option>
+                            </select>
+                          </div>
+                          <div class="col-md-4">
+                            <label class="form-label fw-bold small mb-1">Fecha programada</label>
+                            <input type="date" name="fecha_programada" class="form-control shadow-none" value="{{ caso.fecha_programada|date:'Y-m-d' }}">
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label fw-bold small mb-1">Detalle de la acción</label>
+                            <textarea name="detalle_accion" class="form-control shadow-none" rows="2">{{ caso.detalle_accion }}</textarea>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-bold small mb-1">Evidencia (CÓDIGO)</label>
+                            <input type="text" name="evidencia" class="form-control shadow-none" value="{{ caso.evidencia }}">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label fw-bold small mb-1">Validación</label>
+                            <select name="validacion" class="form-select shadow-none text-warning fw-bold">
+                              <option value="Pendiente">Pendiente</option>
+                              <option value="Aprobado" class="text-success">Aprobado</option>
+                              <option value="Rechazado" class="text-danger">Rechazado</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Derivación -->
+                    <h6 class="fw-bold text-secondary mb-3 pb-2 border-bottom">Derivación</h6>
+                    <div class="form-check mb-2">
+                      <input class="form-check-input" type="checkbox" name="requiere_terreno" value="True" id="checkTerrenoEdit{{ caso.id }}" {% if caso.requiere_terreno %}checked{% endif %}>
+                      <label class="form-check-label text-dark" for="checkTerrenoEdit{{ caso.id }}">
+                        Requiere visita a terreno
+                      </label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="derivar_agenda" value="True" id="checkAgendaEdit{{ caso.id }}" {% if caso.derivar_agenda %}checked{% endif %}>
+                      <label class="form-check-label text-dark" for="checkAgendaEdit{{ caso.id }}">
+                        Ingresar como compromiso a la Agenda Colectiva (Tubo)
+                      </label>
+                    </div>
+
+                  </div>
+                  
+                  <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light border text-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Actualizar Caso</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          <!-- FIN MODAL EDICION -->
+
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center p-5 text-muted">No hay casos sociales registrados en este periodo.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Paginación -->
+    <div class="card-footer bg-white border-top-0 py-3 d-flex justify-content-between align-items-center ps-4 pe-4">
+      <button class="btn btn-sm btn-light border fw-bold text-secondary">← Atrás</button>
+      <span class="text-muted small">Página 1</span>
+      <button class="btn btn-sm btn-light border fw-bold text-secondary">Siguiente →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ========================================== -->
+<!-- MODAL 1: NUEVO CASO SOCIAL (Fuera del For) -->
+<!-- ========================================== -->
+<div class="modal fade" id="modalNuevoExpediente" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow rounded-4">
+      
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-bold text-dark">Nuevo Expediente Social</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form method="post" action="{% url 'principal:crear_caso_social' %}">
+        {% csrf_token %}
+        <div class="modal-body pt-3">
+          
+          <!-- Datos del ciudadano -->
+          <h6 class="fw-bold text-secondary mb-3 pb-2 border-bottom">Datos del ciudadano</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <label class="form-label text-muted small mb-1">RUT</label>
+              <input type="text" name="rut" class="form-control" placeholder="Ej: 12.345.678-9" required>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label text-muted small mb-1">Nombre Completo</label>
+              <input type="text" name="usuario_nombre" class="form-control" placeholder="Nombre del ciudadano" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label text-muted small mb-1">Teléfono</label>
+              <input type="text" name="telefono" class="form-control" placeholder="Ej: 912345678">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label text-muted small mb-1">Sub Atención</label>
+              <select name="sub_atencion" class="form-select">
+                <option value="" selected disabled>Seleccione...</option>
+                <option value="Orientacion Social">Orientación Social</option>
+                <option value="Informe Institucional">Informe Institucional</option>
+                <option value="Exencion Aseo">Exención Aseo</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Flujo de Gestiones (Inicial) -->
+          <div class="d-flex justify-content-between align-items-end border-bottom pb-2 mb-3">
+            <h6 class="fw-bold text-secondary mb-0">Flujo de Gestiones</h6>
+            <small class="text-muted">Primera Gestión</small>
+          </div>
+
+          <div class="bg-light bg-opacity-50 border rounded-3 p-3 mb-4">
+            <div class="row g-3">
+              <div class="col-md-8">
+                <label class="form-label fw-bold small mb-1">Acción Realizada</label>
+                <select name="accion_realizada" class="form-select shadow-none">
+                  <option value="" selected disabled>Seleccione...</option>
+                  <option value="Emergencia">Emergencia</option>
+                  <option value="Visita a Terreno">Visita a Terreno</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-bold small mb-1">Fecha programada</label>
+                <input type="date" name="fecha_programada" class="form-control shadow-none">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold small mb-1">Detalle de la acción</label>
+                <textarea name="detalle_accion" class="form-control shadow-none" rows="2" placeholder="Ingrese los detalles de la solicitud..."></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold small mb-1">Evidencia (CÓDIGO)</label>
+                <input type="text" name="evidencia" class="form-control shadow-none" placeholder="Ej: SOC763">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold small mb-1">Validación</label>
+                <select name="validacion" class="form-select shadow-none text-warning fw-bold">
+                  <option value="Pendiente" selected>Pendiente</option>
+                  <option value="Aprobado" class="text-success">Aprobado</option>
+                  <option value="Rechazado" class="text-danger">Rechazado</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Derivación -->
+          <h6 class="fw-bold text-secondary mb-3 pb-2 border-bottom">Derivación</h6>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="requiere_terreno" value="True" id="checkTerrenoNuevo">
+            <label class="form-check-label text-dark" for="checkTerrenoNuevo">
+              Requiere visita a terreno
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="derivar_agenda" value="True" id="checkAgendaNuevo">
+            <label class="form-check-label text-dark" for="checkAgendaNuevo">
+              Ingresar como compromiso a la Agenda Colectiva (Tubo)
+            </label>
+          </div>
+
+        </div>
+        
+        <div class="modal-footer border-top-0 pt-0">
+          <button type="button" class="btn btn-light border text-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+          <!-- Botón Rojo de La Serena -->
+          <button type="submit" class="btn btn-danger fw-bold" style="background-color: #ad0007; border-color: #ad0007;">Guardar Nuevo Caso</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
