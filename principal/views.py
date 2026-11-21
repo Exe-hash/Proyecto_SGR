@@ -61,6 +61,7 @@ def contexto_usuario(request, **contexto):
         {
             "puede_registrar_actividades": usuario_tiene_rol(request.user, "Funcionario"),
             "puede_ver_agenda": usuario_tiene_rol(request.user, "Funcionario", "Supervisor"),
+            "es_area_social": True if perfil and perfil.cargo and 'social' in perfil.cargo.nombre.lower() else False,
             "puede_ver_equipo": usuario_tiene_rol(request.user, "Supervisor"),
             "puede_verificar_evidencias": usuario_tiene_rol(request.user, "Supervisor"),
             "puede_administrar": usuario_tiene_rol(request.user, "Administrador"),
@@ -101,8 +102,12 @@ def inicio(request):
             elif usuario_tiene_rol(usuario, "Supervisor"):
                 return redirect("principal:equipo")
             else:
+                # NUEVO: Si el cargo contiene la palabra "social", va a su panel especial
+                if hasattr(usuario, 'perfil') and usuario.perfil.cargo and 'social' in usuario.perfil.cargo.nombre.lower():
+                    return redirect("principal:area_social")
+                
+                # Si es territorial, va al panel normal
                 return redirect("principal:panel")
-            # --------------------------------------------
 
         return render(
             request,
