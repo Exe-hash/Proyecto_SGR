@@ -77,6 +77,21 @@ def renderizar(request, plantilla, contexto=None):
         contexto_usuario(request, **(contexto or {})),
     )
 
+def destino_por_rol(usuario):
+    """Devuelve la ruta de la página principal según el rol del usuario."""
+    if usuario_tiene_rol(usuario, "Administrador"):
+        return "principal:administracion"
+    if usuario_tiene_rol(usuario, "Supervisor"):
+        return "principal:equipo"
+    return "principal:panel"
+
+
+def landing(request):
+    """Página pública de bienvenida del SGR."""
+    contexto = {}
+    if request.user.is_authenticated:
+        contexto["destino_usuario"] = destino_por_rol(request.user)
+    return render(request, "principal/landing.html", contexto)
 
 def inicio(request):
     if request.method == "POST":

@@ -7,7 +7,8 @@ from . import views
 app_name = "principal"
 
 urlpatterns = [
-    path("", views.inicio, name="inicio"),
+    path("", views.landing, name="landing"),
+    path("ingresar/", views.inicio, name="inicio"),
     path("panel/", views.panel, name="panel"),
     path("actividades/", views.actividades, name="actividades"),
     path("agenda/", views.agenda, name="agenda"),
@@ -23,7 +24,7 @@ urlpatterns = [
     path("usuarios/desactivar/<int:usuario_id>/", views.desactivar_usuario, name="desactivar_usuario"),
 
     # --- AUTENTICACIÓN Y RECUPERACIÓN DE CONTRASEÑA ---
-    path("cerrar-sesion/", LogoutView.as_view(next_page="principal:inicio"), name="cerrar_sesion"),
+        path("cerrar-sesion/", LogoutView.as_view(next_page="principal:landing"), name="cerrar_sesion"),
     
     path('recuperar-password/', auth_views.PasswordResetView.as_view(
         template_name='principal/password_reset.html',
