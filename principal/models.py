@@ -129,3 +129,53 @@ class Meta(models.Model):
 
     def __str__(self):
         return f"[{self.ponderacion}%] {self.nombre} - Meta: {self.valor_objetivo}"
+
+# --- MODELOS DEL ÁREA SOCIAL (HU-03 / RN-012) ---
+
+class CasoSocial(models.Model):
+    """
+    Agrupa las atenciones de una persona para no duplicar el caso (RN-012).
+    """
+    rut = models.CharField(max_length=15, unique=True, verbose_name="RUT del Ciudadano")
+    usuario_nombre = models.CharField(max_length=150, verbose_name="Nombre Completo")
+    telefono = models.CharField(max_length=50, blank=True, null=True)
+    fecha_ingreso = models.DateField(auto_now_add=True)
+    funcionario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
+    class Meta:
+        verbose_name = "caso social"
+        verbose_name_plural = "casos sociales"
+        ordering = ["-fecha_ingreso"]
+
+    def __str__(self):
+        return f"{self.rut} - {self.usuario_nombre}"
+
+    @property
+    def gestiones_realizadas(self):
+        return self.gestiones.count()
+
+
+class GestionSocial(models.Model):
+    """
+    Detalle de cada atención dentro de un Caso Social (Máximo 3 por RUT).
+    """
+    caso = models.ForeignKey(CasoSocial, on_delete=models.CASCADE, related_name='gestiones')
+    sub_atencion = models.CharField(max_length=100, verbose_name="Tipo de Atención")
+    accion_realizada = models.CharField(max_length=100)
+    fecha_programada = models.DateField(null=True, blank=True)
+    detalle_accion = models.TextField()
+    evidencia_codigo = models.CharField(max_length=50, blank=True, null=True)
+    validacion = models.CharField(max_length=50, default='Pendiente')
+    
+    requiere_terreno = models.BooleanField(default=False)
+    derivar_agenda = models.BooleanField(default=False)
+    
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "gestión social"
+        verbose_name_plural = "gestiones sociales"
+        ordering = ["fecha_registro"]
+
+    def __str__(self):
+        return f"Gestión {self.id} de {self.caso.rut}"
