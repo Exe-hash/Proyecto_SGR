@@ -19,6 +19,10 @@ from .forms import UsuarioCRUDForm
 from django.urls import reverse_lazy
 from django.contrib.auth.models import User
 
+from django.contrib import messages
+from .models import CasoSocial, GestionSocial
+# Asegúrate de que timezone y transaction ya estén importados arriba
+
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
     return (
@@ -57,6 +61,7 @@ def contexto_usuario(request, **contexto):
         {
             "puede_registrar_actividades": usuario_tiene_rol(request.user, "Funcionario"),
             "puede_ver_agenda": usuario_tiene_rol(request.user, "Funcionario", "Supervisor"),
+            "es_area_social": True if perfil and perfil.cargo and 'social' in perfil.cargo.nombre.lower() else False,
             "puede_ver_equipo": usuario_tiene_rol(request.user, "Supervisor"),
             "puede_verificar_evidencias": usuario_tiene_rol(request.user, "Supervisor"),
             "puede_administrar": usuario_tiene_rol(request.user, "Administrador"),
@@ -112,8 +117,12 @@ def inicio(request):
             elif usuario_tiene_rol(usuario, "Supervisor"):
                 return redirect("principal:equipo")
             else:
+                # NUEVO: Si el cargo contiene la palabra "social", va a su panel especial
+                if hasattr(usuario, 'perfil') and usuario.perfil.cargo and 'social' in usuario.perfil.cargo.nombre.lower():
+                    return redirect("principal:area_social")
+                
+                # Si es territorial, va al panel normal
                 return redirect("principal:panel")
-            # --------------------------------------------
 
         return render(
             request,
@@ -464,3 +473,151 @@ def desactivar_usuario(request, usuario_id):
         usuario.is_active = False
         usuario.save()
     return redirect("principal:listar_usuarios")
+
+
+
+@requiere_roles("Funcionario", "Supervisor")
+def area_social(request):
+    """Renderiza la lista de casos sociales (HU-03)."""
+    # Traemos todos los casos y pre-cargamos sus gestiones para evitar consultas N+1
+    casos_db = CasoSocial.objects.prefetch_related('gestiones').all()
+    
+    casos_calculados = []
+    for caso in casos_db:
+        # Buscamos la última gestión para mostrar el tipo principal en la tabla
+        ultima_gestion = caso.gestiones.last()
+        tipo_atencion = ultima_gestion.sub_atencion if ultima_gestion else "Sin gestión"
+        
+        casos_calculados.append({
+            "id": caso.id,
+            "rut": caso.rut,
+            "usuario_nombre": caso.usuario_nombre,
+            "telefono": caso.telefono,
+            "fecha_ingreso": caso.fecha_ingreso,
+            "tipo_atencion": tipo_atencion,
+            "gestiones_realizadas": caso.gestiones_realizadas,
+            "gestiones_maximas": 3,
+            # Pasamos datos de la última gestión para inyectar en el modal de edición
+            "sub_atencion": ultima_gestion.sub_atencion if ultima_gestion else "",
+            "detalle_accion": ultima_gestion.detalle_accion if ultima_gestion else "",
+            "evidencia": ultima_gestion.evidencia_codigo if ultima_gestion else "",
+            "requiere_terreno": ultima_gestion.requiere_terreno if ultima_gestion else False,
+            "derivar_agenda": ultima_gestion.derivar_agenda if ultima_gestion else False,
+            "fecha_programada": ultima_gestion.fecha_programada if ultima_gestion else None,
+        })
+
+    return renderizar(
+        request,
+        "principal/area_social.html",
+        {
+            "pagina": "area_social",
+            "casos": casos_calculados,
+        },
+    )
+
+
+@requiere_roles("Funcionario", "Supervisor")
+@transaction.atomic
+def crear_caso_social(request):
+    """Crea un Caso Nuevo y su primera Gestión en una transacción (HU-03)."""
+    if request.method == "POST":
+        rut = request.POST.get("rut")
+        
+        # 1. Validar si el RUT ya existe para no duplicar el caso cabecera
+        caso, creado = CasoSocial.objects.get_or_create(
+            rut=rut,
+            defaults={
+                'usuario_nombre': request.POST.get("usuario_nombre"),
+                'telefono': request.POST.get("telefono"),
+                'funcionario': request.user
+            }
+        )
+
+        # 2. Control de tope de 3 gestiones (RN-012)
+        if caso.gestiones.count() >= 3:
+            messages.error(request, "Este RUT ya alcanzó el máximo de 3 gestiones sociales.")
+            return redirect("principal:area_social")
+
+        # 3. Crear la nueva Gestión
+        fecha_prog_str = request.POST.get("fecha_programada")
+        fecha_prog = fecha_prog_str if fecha_prog_str else None
+
+        derivar_agenda = request.POST.get("derivar_agenda") == "True"
+
+        GestionSocial.objects.create(
+            caso=caso,
+            sub_atencion=request.POST.get("sub_atencion", "Orientación Social"),
+            accion_realizada=request.POST.get("accion_realizada", "Sin acción"),
+            fecha_programada=fecha_prog,
+            detalle_accion=request.POST.get("detalle_accion", ""),
+            evidencia_codigo=request.POST.get("evidencia", ""),
+            validacion=request.POST.get("validacion", "Pendiente"),
+            requiere_terreno=(request.POST.get("requiere_terreno") == "True"),
+            derivar_agenda=derivar_agenda
+        )
+
+        # 4. Derivar a Compromiso / Agenda Colectiva (EP-04)
+        if derivar_agenda:
+            # Obtenemos la delegación del funcionario
+            perfil = getattr(request.user, "perfil", None)
+            if perfil:
+                import uuid
+                codigo_com = f"COM-SOC-{uuid.uuid4().hex[:4].upper()}"
+                Compromiso.objects.create(
+                    codigo=codigo_com,
+                    titulo=f"Derivación Social: {caso.usuario_nombre}",
+                    territorio=perfil.delegacion,
+                    responsable=request.user, # Se asigna al mismo funcionario por defecto
+                    area="Área Social",
+                    solicitante=caso.usuario_nombre,
+                    fecha=timezone.now().date(),
+                    plazo="Por definir" if not fecha_prog else str(fecha_prog)
+                )
+
+        messages.success(request, "Caso social y gestión registrados correctamente.")
+        return redirect("principal:area_social")
+        
+    return redirect("principal:area_social")
+
+
+@requiere_roles("Funcionario", "Supervisor")
+@transaction.atomic
+def editar_caso_social(request):
+    """Agrega la 2da o 3ra gestión a un caso existente."""
+    if request.method == "POST":
+        caso_id = request.POST.get("caso_id")
+        
+        try:
+            caso = CasoSocial.objects.get(id=caso_id)
+            
+            # Control estricto de máximo 3 atenciones
+            if caso.gestiones.count() >= 3:
+                messages.error(request, "Límite máximo alcanzado. No se pueden agregar más gestiones a este caso.")
+                return redirect("principal:area_social")
+
+            fecha_prog_str = request.POST.get("fecha_programada")
+            fecha_prog = fecha_prog_str if fecha_prog_str else None
+
+            # Actualizamos datos del ciudadano por si cambiaron el teléfono
+            caso.telefono = request.POST.get("telefono", caso.telefono)
+            caso.save()
+
+            # Creamos la nueva gestión anidada
+            GestionSocial.objects.create(
+                caso=caso,
+                sub_atencion=request.POST.get("sub_atencion", ""),
+                accion_realizada=request.POST.get("accion_realizada", ""),
+                fecha_programada=fecha_prog,
+                detalle_accion=request.POST.get("detalle_accion", ""),
+                evidencia_codigo=request.POST.get("evidencia", ""),
+                validacion=request.POST.get("validacion", "Pendiente"),
+                requiere_terreno=(request.POST.get("requiere_terreno") == "True"),
+                derivar_agenda=(request.POST.get("derivar_agenda") == "True")
+            )
+            
+            messages.success(request, f"Gestión número {caso.gestiones.count()} registrada para {caso.rut}.")
+            
+        except CasoSocial.DoesNotExist:
+            messages.error(request, "El caso especificado no existe.")
+            
+    return redirect("principal:area_social")

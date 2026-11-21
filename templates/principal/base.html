@@ -121,6 +121,14 @@
       </a>
       {% endif %}
 
+      {% if es_area_social %}
+      <li class="nav-item">
+        <a class="nav-link {% if pagina == 'area_social' %}active text-danger fw-bold{% else %}text-white{% endif %}" href="{% url 'principal:area_social' %}">
+          Historial Área Social
+        </a>
+      </li>
+      {% endif %}
+
       <form method="post" action="{% url 'principal:cerrar_sesion' %}" style="margin-top: auto;">
         {% csrf_token %}
         <button type="submit" style="width: 100%; background: none; border: 1px solid #ef4444; color: #ef4444; padding: 0.5rem; border-radius: 6px; cursor: pointer;">Cerrar sesión</button>
