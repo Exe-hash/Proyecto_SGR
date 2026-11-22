@@ -1,0 +1,390 @@
+{% extends 'principal/base.html' %}
+{% block title %}Asignación de tareas | SGR{% endblock %}
+
+{% comment %}
+Pantalla exclusiva del Supervisor / Delegado para asignar y monitorear tareas.
+Variables que debe entregar la vista (pendiente de implementar en views.py):
+    - resumen: dict con pendientes, en_proceso, completadas, vencidas
+    - funcionarios: lista con id, nombre, cargo
+    - territorios: lista con id, nombre
+    - tareas: lista con id, codigo, titulo, descripcion, funcionario (nombre),
+    funcionario_id, territorio, territorio_id, prioridad, fecha_limite,
+    esta_vencida, estado
+{% endcomment %}
+
+{% block content %}
+<style>
+.btn-sgr {
+    background-color: #ad0007;
+    border-color: #ad0007;
+    color: #fff;
+}
+.btn-sgr:hover,
+.btn-sgr:focus {
+    background-color: #8a0006;
+    border-color: #8a0006;
+    color: #fff;
+}
+.btn-outline-sgr {
+    border-color: #ad0007;
+    color: #ad0007;
+}
+.btn-outline-sgr:hover {
+    background-color: #ad0007;
+    color: #fff;
+}
+.resumen-num {
+    font-size: 2.4rem;
+    font-weight: 800;
+    line-height: 1;
+}
+.form-check-input:checked {
+    background-color: #ad0007;
+    border-color: #ad0007;
+}
+</style>
+
+<div class="container-fluid px-0">
+
+<!-- ===== 1. Encabezado ===== -->
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+    <h1 class="mb-1">Asignación de Tareas al Equipo</h1>
+    <p class="text-muted mb-0">
+        Asigna tareas a los funcionarios de tu delegación y revisa su avance y plazos en un solo lugar.
+    </p>
+    </div>
+    <button type="button" class="btn btn-sgr fw-bold px-4 py-2" data-bs-toggle="modal" data-bs-target="#modalAsignarTarea">
+    ✚ Asignar nueva tarea
+    </button>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+    {% endfor %}
+{% endif %}
+
+<!-- ===== 2. Tarjetas resumen ===== -->
+<div class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-3">
+    <div class="card bg-white shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">Pendientes</h6>
+        <span class="resumen-num text-secondary">{{ resumen.pendientes|default:0 }}</span>
+        <small class="text-muted mt-2">Aún no iniciadas</small>
+    </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+    <div class="card bg-white shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">En proceso</h6>
+        <span class="resumen-num text-primary">{{ resumen.en_proceso|default:0 }}</span>
+        <small class="text-muted mt-2">En desarrollo por el equipo</small>
+    </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+    <div class="card bg-white shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">Completadas</h6>
+        <span class="resumen-num text-success">{{ resumen.completadas|default:0 }}</span>
+        <small class="text-muted mt-2">Terminadas en el período</small>
+    </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+    <div class="card bg-white shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-3">Vencidas</h6>
+        <span class="resumen-num text-danger">{{ resumen.vencidas|default:0 }}</span>
+        <small class="text-muted mt-2">Fuera de plazo</small>
+    </div>
+    </div>
+</div>
+
+<!-- ===== 3. Filtros ===== -->
+<div class="card bg-white shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-body p-4">
+    <form method="get" action="#" class="row g-3 align-items-end">
+        <div class="col-md-6 col-lg-3">
+        <label for="filtroFuncionario" class="form-label fw-semibold small">Funcionario</label>
+        <select id="filtroFuncionario" name="funcionario_id" class="form-select">
+            <option value="">Todos</option>
+            {% for f in funcionarios %}
+            <option value="{{ f.id }}" {% if request.GET.funcionario_id == f.id|stringformat:"s" %}selected{% endif %}>{{ f.nombre }}</option>
+            {% endfor %}
+        </select>
+        </div>
+        <div class="col-md-6 col-lg-3">
+        <label for="filtroEstado" class="form-label fw-semibold small">Estado</label>
+        <select id="filtroEstado" name="estado" class="form-select">
+            <option value="">Todos</option>
+            <option value="Pendiente" {% if request.GET.estado == "Pendiente" %}selected{% endif %}>Pendiente</option>
+            <option value="En proceso" {% if request.GET.estado == "En proceso" %}selected{% endif %}>En proceso</option>
+            <option value="Completada" {% if request.GET.estado == "Completada" %}selected{% endif %}>Completada</option>
+            <option value="Vencida" {% if request.GET.estado == "Vencida" %}selected{% endif %}>Vencida</option>
+        </select>
+        </div>
+        <div class="col-md-6 col-lg-3">
+        <label for="filtroPrioridad" class="form-label fw-semibold small">Prioridad</label>
+        <select id="filtroPrioridad" name="prioridad" class="form-select">
+            <option value="">Todas</option>
+            <option value="Baja" {% if request.GET.prioridad == "Baja" %}selected{% endif %}>Baja</option>
+            <option value="Media" {% if request.GET.prioridad == "Media" %}selected{% endif %}>Media</option>
+            <option value="Alta" {% if request.GET.prioridad == "Alta" %}selected{% endif %}>Alta</option>
+            <option value="Urgente" {% if request.GET.prioridad == "Urgente" %}selected{% endif %}>Urgente</option>
+        </select>
+        </div>
+        <div class="col-md-6 col-lg-3 d-flex gap-2">
+        <button type="submit" class="btn btn-sgr fw-bold flex-grow-1">Filtrar</button>
+        <a href="?" class="btn btn-outline-secondary">Limpiar</a>
+        </div>
+    </form>
+    </div>
+</div>
+
+<!-- ===== 4. Tabla de tareas ===== -->
+<div class="card bg-white shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-header bg-white py-3 border-bottom rounded-top-4">
+    <h5 class="mb-0 fw-bold">Tareas asignadas</h5>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+        <tr>
+            <th class="ps-4">Código</th>
+            <th>Tarea / Descripción</th>
+            <th>Funcionario asignado</th>
+            <th>Territorio</th>
+            <th>Prioridad</th>
+            <th>Fecha límite</th>
+            <th>Estado</th>
+            <th class="text-end pe-4">Acción</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for tarea in tareas %}
+        <tr>
+            <td class="ps-4 fw-semibold text-nowrap">{{ tarea.codigo }}</td>
+            <td style="min-width: 220px;">
+            <strong class="d-block">{{ tarea.titulo }}</strong>
+            <small class="text-muted">{{ tarea.descripcion|truncatechars:80 }}</small>
+            </td>
+            <td>{{ tarea.funcionario }}</td>
+            <td>{{ tarea.territorio|default:"—" }}</td>
+            <td>
+            {% if tarea.prioridad == "Urgente" %}
+                <span class="badge bg-danger">Urgente</span>
+            {% elif tarea.prioridad == "Alta" %}
+                <span class="badge bg-warning text-dark">Alta</span>
+            {% elif tarea.prioridad == "Media" %}
+                <span class="badge bg-info text-dark">Media</span>
+            {% else %}
+                <span class="badge bg-secondary">Baja</span>
+            {% endif %}
+            </td>
+            <td class="text-nowrap {% if tarea.esta_vencida %}text-danger fw-bold{% endif %}">
+            {{ tarea.fecha_limite|date:"d/m/Y" }}
+            {% if tarea.esta_vencida %}<small class="d-block">Vencida</small>{% endif %}
+            </td>
+            <td>
+            {% if tarea.estado == "Completada" %}
+                <span class="badge rounded-pill bg-success">Completada</span>
+            {% elif tarea.estado == "En proceso" %}
+                <span class="badge rounded-pill bg-primary">En proceso</span>
+            {% elif tarea.estado == "Vencida" %}
+                <span class="badge rounded-pill bg-danger">Vencida</span>
+            {% else %}
+                <span class="badge rounded-pill bg-secondary">Pendiente</span>
+            {% endif %}
+            </td>
+            <td class="text-end pe-4">
+            {% if tarea.estado != 'Completada' %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-sgr text-nowrap"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalEditarTarea"
+                        data-tarea-id="{{ tarea.id }}"
+                        data-tarea-codigo="{{ tarea.codigo }}"
+                        data-tarea-titulo="{{ tarea.titulo }}"
+                        data-tarea-descripcion="{{ tarea.descripcion }}"
+                        data-funcionario-id="{{ tarea.funcionario_id }}"
+                        data-territorio-id="{{ tarea.territorio_id|default:'' }}"
+                        data-prioridad="{{ tarea.prioridad }}"
+                        data-fecha-limite="{{ tarea.fecha_limite|date:'Y-m-d' }}">
+                Reasignar / Editar
+                </button>
+            {% else %}
+                <span class="text-muted small">Sin acciones</span>
+            {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+            No hay tareas registradas con los filtros seleccionados.
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+</div>
+
+<!-- ===== 5. Modal: asignar nueva tarea ===== -->
+<div class="modal fade" id="modalAsignarTarea" tabindex="-1" aria-labelledby="modalAsignarTareaLabel" aria-hidden="true">
+<div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 rounded-4">
+    <form method="post" action="#">
+        {% csrf_token %}
+        <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="modalAsignarTareaLabel">Asignar nueva tarea</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+            <label for="asignarFuncionario" class="form-label fw-semibold">Funcionario <span class="text-danger">*</span></label>
+            <select id="asignarFuncionario" name="funcionario_id" class="form-select" required>
+                <option value="" selected disabled>Selecciona un funcionario</option>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}">{{ f.nombre }} — {{ f.cargo }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <div class="col-md-6">
+            <label for="asignarTerritorio" class="form-label fw-semibold">Territorio</label>
+            <select id="asignarTerritorio" name="territorio_id" class="form-select">
+                <option value="" selected>Sin territorio específico</option>
+                {% for t in territorios %}
+                <option value="{{ t.id }}">{{ t.nombre }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <div class="col-12">
+            <label for="asignarTitulo" class="form-label fw-semibold">Título <span class="text-danger">*</span></label>
+            <input type="text" id="asignarTitulo" name="titulo" class="form-control" placeholder="Ej: Visita técnica Junta de Vecinos" maxlength="150" required>
+            </div>
+            <div class="col-12">
+            <label for="asignarDescripcion" class="form-label fw-semibold">Descripción <span class="text-danger">*</span></label>
+            <textarea id="asignarDescripcion" name="descripcion" class="form-control" rows="4" placeholder="Instrucciones para el funcionario: qué hacer, dónde y qué evidencia debe entregar." required></textarea>
+            </div>
+            <div class="col-md-6">
+            <label for="asignarPrioridad" class="form-label fw-semibold">Prioridad</label>
+            <select id="asignarPrioridad" name="prioridad" class="form-select">
+                <option value="Baja">Baja</option>
+                <option value="Media" selected>Media</option>
+                <option value="Alta">Alta</option>
+                <option value="Urgente">Urgente</option>
+            </select>
+            </div>
+            <div class="col-md-6">
+            <label for="asignarFecha" class="form-label fw-semibold">Fecha límite <span class="text-danger">*</span></label>
+            <input type="date" id="asignarFecha" name="fecha_limite" class="form-control" required>
+            </div>
+            <div class="col-12">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="asignarTubo" name="ingresa_al_tubo" value="1" checked>
+                <label class="form-check-label" for="asignarTubo">
+                Mostrar también en el Tubo de Seguimiento de la delegación
+                </label>
+            </div>
+            </div>
+        </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-sgr fw-bold px-4">Guardar tarea</button>
+        </div>
+    </form>
+    </div>
+</div>
+</div>
+
+<!-- ===== Modal: reasignar / editar tarea ===== -->
+<div class="modal fade" id="modalEditarTarea" tabindex="-1" aria-labelledby="modalEditarTareaLabel" aria-hidden="true">
+<div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 rounded-4">
+    <form method="post" action="#">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="editar">
+        <input type="hidden" name="tarea_id" id="editarTareaId">
+        <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="modalEditarTareaLabel">
+            Reasignar / editar tarea <span class="text-muted fw-normal" id="editarTareaCodigo"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+            <label for="editarFuncionario" class="form-label fw-semibold">Funcionario <span class="text-danger">*</span></label>
+            <select id="editarFuncionario" name="funcionario_id" class="form-select" required>
+                {% for f in funcionarios %}
+                <option value="{{ f.id }}">{{ f.nombre }} — {{ f.cargo }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <div class="col-md-6">
+            <label for="editarTerritorio" class="form-label fw-semibold">Territorio</label>
+            <select id="editarTerritorio" name="territorio_id" class="form-select">
+                <option value="">Sin territorio específico</option>
+                {% for t in territorios %}
+                <option value="{{ t.id }}">{{ t.nombre }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <div class="col-12">
+            <label for="editarTitulo" class="form-label fw-semibold">Título <span class="text-danger">*</span></label>
+            <input type="text" id="editarTitulo" name="titulo" class="form-control" maxlength="150" required>
+            </div>
+            <div class="col-12">
+            <label for="editarDescripcion" class="form-label fw-semibold">Descripción <span class="text-danger">*</span></label>
+            <textarea id="editarDescripcion" name="descripcion" class="form-control" rows="4" required></textarea>
+            </div>
+            <div class="col-md-6">
+            <label for="editarPrioridad" class="form-label fw-semibold">Prioridad</label>
+            <select id="editarPrioridad" name="prioridad" class="form-select">
+                <option value="Baja">Baja</option>
+                <option value="Media">Media</option>
+                <option value="Alta">Alta</option>
+                <option value="Urgente">Urgente</option>
+            </select>
+            </div>
+            <div class="col-md-6">
+            <label for="editarFecha" class="form-label fw-semibold">Fecha límite <span class="text-danger">*</span></label>
+            <input type="date" id="editarFecha" name="fecha_limite" class="form-control" required>
+            </div>
+        </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-sgr fw-bold px-4">Guardar cambios</button>
+        </div>
+    </form>
+    </div>
+</div>
+</div>
+
+<script>
+  // Rellena el modal de edición con los datos de la tarea seleccionada.
+document.addEventListener("DOMContentLoaded", function () {
+    var modal = document.getElementById("modalEditarTarea");
+    if (!modal) return;
+
+    modal.addEventListener("show.bs.modal", function (evento) {
+    var boton = evento.relatedTarget;
+    if (!boton) return;
+    var d = boton.dataset;
+
+    document.getElementById("editarTareaId").value = d.tareaId || "";
+    document.getElementById("editarTareaCodigo").textContent = d.tareaCodigo ? "(" + d.tareaCodigo + ")" : "";
+    document.getElementById("editarTitulo").value = d.tareaTitulo || "";
+    document.getElementById("editarDescripcion").value = d.tareaDescripcion || "";
+    document.getElementById("editarFuncionario").value = d.funcionarioId || "";
+    document.getElementById("editarTerritorio").value = d.territorioId || "";
+    document.getElementById("editarPrioridad").value = d.prioridad || "Media";
+    document.getElementById("editarFecha").value = d.fechaLimite || "";
+    });
+});
+</script>
+{% endblock %}
