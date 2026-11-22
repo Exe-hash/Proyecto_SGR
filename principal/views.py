@@ -24,6 +24,12 @@ from .models import (
     Observacion,
 )
 
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
+from django.http import FileResponse, Http404, JsonResponse
+from django.shortcuts import get_object_or_404
+from .models import AjusteDesempeno, Vecino
+
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
     return (
@@ -697,3 +703,101 @@ def editar_caso_social(request):
 
     messages.success(request, f"Gestión {caso.gestiones.count()} de 3 registrada para {caso.rut}.")
     return redirect("principal:area_social")
+
+@login_required
+def cambiar_password_inicial(request):
+    """Obliga a reemplazar la contraseña temporal antes de operar en el sistema."""
+    perfil = getattr(request.user, "perfil", None)
+    if request.method == "POST":
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            usuario = form.save()
+            update_session_auth_hash(request, usuario)
+            if perfil:
+                perfil.debe_cambiar_clave = False
+                perfil.save(update_fields=["debe_cambiar_clave"])
+            messages.success(request, "Contraseña actualizada correctamente.")
+            return redirect("principal:panel")
+    else:
+        form = PasswordChangeForm(request.user)
+
+    return renderizar(
+        request,
+        "principal/cambiar_password_inicial.html",
+        {"pagina": "cambiar_password", "form": form},
+    )
+
+
+def _puede_ver_archivo_usuario(solicitante, dueno_usuario):
+    """Solo el propio funcionario, un Administrador o un Supervisor de su misma delegación."""
+    if solicitante.id == dueno_usuario.id:
+        return True
+    if usuario_tiene_rol(solicitante, "Administrador"):
+        return True
+    if usuario_tiene_rol(solicitante, "Supervisor"):
+        p_sol = getattr(solicitante, "perfil", None)
+        p_due = getattr(dueno_usuario, "perfil", None)
+        if p_sol and p_due and p_sol.delegacion_id == p_due.delegacion_id:
+            return True
+    return False
+
+
+@login_required
+def descargar_evidencia(request, evidencia_id):
+    evidencia = get_object_or_404(Evidencia, id=evidencia_id)
+    if not _puede_ver_archivo_usuario(request.user, evidencia.funcionario):
+        raise PermissionDenied("No tienes permiso para acceder a esta evidencia.")
+    if not evidencia.fotografia:
+        raise Http404("Archivo no disponible.")
+    return FileResponse(evidencia.fotografia.open("rb"))
+
+
+@login_required
+def descargar_evidencia_social(request, gestion_id):
+    gestion = get_object_or_404(GestionSocial.objects.select_related("caso"), id=gestion_id)
+    if not _puede_ver_archivo_usuario(request.user, gestion.caso.funcionario):
+        raise PermissionDenied("No tienes permiso para acceder a este documento social.")
+    if not gestion.imagen_verificacion:
+        raise Http404("Archivo no disponible.")
+    return FileResponse(gestion.imagen_verificacion.open("rb"))
+
+
+@login_required
+def descargar_respaldo_ajuste(request, ajuste_id):
+    ajuste = get_object_or_404(AjusteDesempeno, id=ajuste_id)
+    if not _puede_ver_archivo_usuario(request.user, ajuste.funcionario):
+        raise PermissionDenied("No tienes permiso para acceder a este respaldo.")
+    if not ajuste.archivo_respaldo:
+        raise Http404("Respaldo no disponible.")
+    return FileResponse(ajuste.archivo_respaldo.open("rb"))
+
+
+@login_required
+def api_buscar_vecino(request):
+    """Endpoint para autocompletar nombre y teléfono cuando el RUT ya existe en BD."""
+    rut = (request.GET.get("rut") or "").strip()
+    if not rut:
+        return JsonResponse({"encontrado": False})
+
+    rut_limpio = rut.replace(".", "").upper()
+    vecino = Vecino.objects.filter(Q(rut__iexact=rut) | Q(rut__iexact=rut_limpio)).first()
+    if vecino:
+        return JsonResponse({
+            "encontrado": True,
+            "rut": vecino.rut,
+            "nombre": vecino.nombre_completo,
+            "telefono": vecino.telefono,
+            "direccion": vecino.direccion,
+        })
+
+    caso = CasoSocial.objects.filter(Q(rut__iexact=rut) | Q(rut__iexact=rut_limpio)).first()
+    if caso:
+        return JsonResponse({
+            "encontrado": True,
+            "rut": caso.rut,
+            "nombre": caso.usuario_nombre,
+            "telefono": caso.telefono or "",
+            "direccion": "",
+        })
+
+    return JsonResponse({"encontrado": False})
