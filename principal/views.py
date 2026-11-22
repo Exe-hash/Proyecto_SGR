@@ -1,27 +1,28 @@
-"""Vistas de presentación del SGR con datos ficticios de demostración."""
-
 from functools import wraps
+import uuid
 
+from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import redirect, render
+from django.urls import reverse_lazy
 from django.utils import timezone
 
 from .datos_demo import COMPROMISOS, EQUIPO, EVIDENCIAS, METAS
-import uuid
-from .models import Evidencia, Compromiso, Delegacion, Observacion
-from .models import Meta
-
-from django.db import transaction
-from django.contrib.auth.models import User, Group
 from .forms import UsuarioCRUDForm
-from django.urls import reverse_lazy
-from django.contrib.auth.models import User
-
-from django.contrib import messages
-from .models import CasoSocial, GestionSocial
-# Asegúrate de que timezone y transaction ya estén importados arriba
+from .models import (
+    CasoSocial,
+    Compromiso,
+    Delegacion,
+    Evidencia,
+    GestionSocial,
+    Meta,
+    Observacion,
+)
 
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
@@ -116,58 +117,6 @@ def inicio(request):
         )
 
     return render(request, "principal/inicio.html")
-
-
-
-@requiere_roles("Funcionario", "Supervisor")
-def panel(request):
-    mis_evidencias = Evidencia.objects.filter(funcionario=request.user)
-    ev_aprobadas = mis_evidencias.filter(estado="Aprobada").count()
-    ev_revision = mis_evidencias.filter(estado="En revisión").count()
-    ev_rechazadas = mis_evidencias.filter(estado="Rechazada").count()
-    
-    total_ev = mis_evidencias.count()
-    porcentaje_avance = int((ev_aprobadas / total_ev * 100)) if total_ev > 0 else 0
-    compromisos_vencer = Compromiso.objects.filter(responsable=request.user).order_by('plazo')[:4]
-
-    # --- LÓGICA MATEMÁTICA DE LAS METAS ---
-    metas_db = Meta.objects.filter(vigente=True)
-    metas_calculadas = []
-
-    for m in metas_db:
-        # Cuenta cuántas evidencias aprobadas tiene el funcionario PARA ESTA META específica
-        avance_real = mis_evidencias.filter(meta_relacionada=m, estado="Aprobada").count()
-        
-        # Calcula el porcentaje (avance / meta * 100)
-        cumplimiento = (avance_real / m.valor_objetivo * 100) if m.valor_objetivo > 0 else 0
-        if cumplimiento > 100: cumplimiento = 100 # Tope visual al 100%
-        
-        # Calcula cuánto suma al porcentaje final
-        resultado = (m.ponderacion * cumplimiento) / 100
-
-        metas_calculadas.append({
-            "id": m.id,
-            "nombre": m.nombre,
-            "ponderacion": m.ponderacion,
-            "avance": avance_real,
-            "meta": m.valor_objetivo,
-            "barra": int(cumplimiento),
-            "resultado": round(resultado, 1)
-        })
-
-    return renderizar(
-        request,
-        "principal/panel.html",
-        {
-            "pagina": "panel",
-            "ev_aprobadas": ev_aprobadas,
-            "ev_revision": ev_revision,
-            "ev_rechazadas": ev_rechazadas,
-            "porcentaje_avance": porcentaje_avance,
-            "compromisos_vencer": compromisos_vencer,
-            "metas": metas_calculadas, 
-        },
-    )
 
 
 @requiere_roles("Funcionario")
@@ -462,33 +411,139 @@ def desactivar_usuario(request, usuario_id):
 
 
 @requiere_roles("Funcionario", "Supervisor")
+def panel(request):
+    mis_evidencias = Evidencia.objects.filter(funcionario=request.user)
+    ev_aprobadas = mis_evidencias.filter(estado="Aprobada").count()
+    ev_revision = mis_evidencias.filter(estado="En revisión").count()
+    ev_rechazadas = mis_evidencias.filter(estado="Rechazada").count()
+
+    total_ev = mis_evidencias.count()
+    porcentaje_avance = int((ev_aprobadas / total_ev * 100)) if total_ev > 0 else 0
+    compromisos_vencer = Compromiso.objects.filter(responsable=request.user).order_by("plazo")[:4]
+
+    # --- FILTRO ESTRICTO POR CARGO DEL USUARIO ---
+    perfil = getattr(request.user, "perfil", None)
+    if perfil and perfil.cargo:
+        metas_db = Meta.objects.filter(vigente=True, cargo=perfil.cargo)
+    else:
+        metas_db = Meta.objects.none()
+
+    metas_calculadas = []
+    for m in metas_db:
+        avance_real = mis_evidencias.filter(meta_relacionada=m, estado="Aprobada").count()
+
+        cumplimiento = (avance_real / m.valor_objetivo * 100) if m.valor_objetivo > 0 else 0
+        if cumplimiento > 120:
+            cumplimiento = 120  # Tope máximo de cumplimiento exigido por rúbrica
+
+        resultado = (m.ponderacion * cumplimiento) / 100
+
+        metas_calculadas.append({
+            "id": m.id,
+            "nombre": m.nombre,
+            "ponderacion": m.ponderacion,
+            "avance": avance_real,
+            "meta": m.valor_objetivo,
+            "barra": min(int(cumplimiento), 100),  # Ancho visual máximo 100%
+            "resultado": round(resultado, 1),
+        })
+
+    return renderizar(
+        request,
+        "principal/panel.html",
+        {
+            "pagina": "panel",
+            "ev_aprobadas": ev_aprobadas,
+            "ev_revision": ev_revision,
+            "ev_rechazadas": ev_rechazadas,
+            "porcentaje_avance": porcentaje_avance,
+            "compromisos_vencer": compromisos_vencer,
+            "metas": metas_calculadas,
+        },
+    )
+
+
+def _derivar_caso_a_agenda(request, caso, fecha_prog):
+    """Helper interno para derivar una gestión social a la Agenda Colectiva (Tubo)."""
+    perfil = getattr(request.user, "perfil", None)
+    if not perfil or not perfil.delegacion:
+        return
+    codigo_com = f"COM-SOC-{uuid.uuid4().hex[:4].upper()}"
+    Compromiso.objects.create(
+        codigo=codigo_com,
+        titulo=f"Derivación Social: {caso.usuario_nombre}",
+        territorio=perfil.delegacion,
+        responsable=request.user,
+        area="Área Social",
+        solicitante=caso.usuario_nombre,
+        fecha=timezone.now().date(),
+        plazo="Por definir" if not fecha_prog else str(fecha_prog),
+    )
+
+
+@requiere_roles("Funcionario", "Supervisor")
 def area_social(request):
-    """Renderiza la lista de casos sociales (HU-03)."""
-    # Traemos todos los casos y pre-cargamos sus gestiones para evitar consultas N+1
-    casos_db = CasoSocial.objects.prefetch_related('gestiones').all()
-    
+    """Renderiza la lista de casos sociales con su historial independiente de gestiones."""
+    es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
+    casos_qs = CasoSocial.objects.prefetch_related("gestiones").all()
+
+    # Filtros reales (mes/año, tipo de atención y búsqueda por RUT o nombre)
+    filtro_fecha = (request.GET.get("filtro_fecha") or "").strip()  # formato YYYY-MM
+    filtro_tipo = (request.GET.get("filtro_tipo") or "").strip()
+    busqueda = (request.GET.get("q") or "").strip()
+
+    if filtro_fecha and "-" in filtro_fecha:
+        try:
+            anio_str, mes_str = filtro_fecha.split("-")
+            casos_qs = casos_qs.filter(fecha_ingreso__year=int(anio_str), fecha_ingreso__month=int(mes_str))
+        except ValueError:
+            pass
+
+    if filtro_tipo:
+        casos_qs = casos_qs.filter(gestiones__sub_atencion__icontains=filtro_tipo).distinct()
+
+    if busqueda:
+        casos_qs = casos_qs.filter(Q(rut__icontains=busqueda) | Q(usuario_nombre__icontains=busqueda))
+
     casos_calculados = []
-    for caso in casos_db:
-        # Buscamos la última gestión para mostrar el tipo principal en la tabla
-        ultima_gestion = caso.gestiones.last()
+    for caso in casos_qs:
+        gestiones = list(caso.gestiones.all())
+        ultima_gestion = gestiones[-1] if gestiones else None
         tipo_atencion = ultima_gestion.sub_atencion if ultima_gestion else "Sin gestión"
-        
+        es_dueno = (caso.funcionario_id == request.user.id)
+
+        gestiones_detalle = []
+        for idx, g in enumerate(gestiones, start=1):
+            esta_aprobada = g.validacion in ("Aprobado", "Aprobada")
+            gestiones_detalle.append({
+                "numero": idx,
+                "id": g.id,
+                "sub_atencion": g.sub_atencion,
+                "accion_realizada": g.accion_realizada,
+                "fecha_programada": g.fecha_programada,
+                "detalle_accion": g.detalle_accion,
+                "evidencia_codigo": g.evidencia_codigo or "",
+                "validacion": g.validacion,
+                "requiere_terreno": g.requiere_terreno,
+                "derivar_agenda": g.derivar_agenda,
+                "fecha_registro": g.fecha_registro,
+                "esta_aprobada": esta_aprobada,
+                "puede_editar": es_supervisor or (es_dueno and not esta_aprobada),
+            })
+
         casos_calculados.append({
             "id": caso.id,
             "rut": caso.rut,
             "usuario_nombre": caso.usuario_nombre,
-            "telefono": caso.telefono,
+            "telefono": caso.telefono or "",
             "fecha_ingreso": caso.fecha_ingreso,
             "tipo_atencion": tipo_atencion,
-            "gestiones_realizadas": caso.gestiones_realizadas,
+            "gestiones_realizadas": len(gestiones),
             "gestiones_maximas": 3,
-            # Pasamos datos de la última gestión para inyectar en el modal de edición
-            "sub_atencion": ultima_gestion.sub_atencion if ultima_gestion else "",
-            "detalle_accion": ultima_gestion.detalle_accion if ultima_gestion else "",
-            "evidencia": ultima_gestion.evidencia_codigo if ultima_gestion else "",
-            "requiere_terreno": ultima_gestion.requiere_terreno if ultima_gestion else False,
-            "derivar_agenda": ultima_gestion.derivar_agenda if ultima_gestion else False,
-            "fecha_programada": ultima_gestion.fecha_programada if ultima_gestion else None,
+            "puede_agregar_gestion": len(gestiones) < 3 and (es_dueno or es_supervisor),
+            "siguiente_numero": len(gestiones) + 1,
+            "gestiones": gestiones_detalle,
+            "es_dueno_o_supervisor": es_dueno or es_supervisor,
         })
 
     return renderizar(
@@ -497,6 +552,10 @@ def area_social(request):
         {
             "pagina": "area_social",
             "casos": casos_calculados,
+            "es_supervisor": es_supervisor,
+            "filtro_fecha": filtro_fecha,
+            "filtro_tipo": filtro_tipo,
+            "busqueda": busqueda,
         },
     )
 
@@ -506,103 +565,135 @@ def area_social(request):
 def crear_caso_social(request):
     """Crea un Caso Nuevo y su primera Gestión en una transacción (HU-03)."""
     if request.method == "POST":
-        rut = request.POST.get("rut")
-        
-        # 1. Validar si el RUT ya existe para no duplicar el caso cabecera
-        caso, creado = CasoSocial.objects.get_or_create(
+        rut = (request.POST.get("rut") or "").strip()
+        es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
+
+        caso, _ = CasoSocial.objects.get_or_create(
             rut=rut,
             defaults={
-                'usuario_nombre': request.POST.get("usuario_nombre"),
-                'telefono': request.POST.get("telefono"),
-                'funcionario': request.user
-            }
+                "usuario_nombre": (request.POST.get("usuario_nombre") or "").strip(),
+                "telefono": (request.POST.get("telefono") or "").strip(),
+                "funcionario": request.user,
+            },
         )
 
-        # 2. Control de tope de 3 gestiones (RN-012)
         if caso.gestiones.count() >= 3:
             messages.error(request, "Este RUT ya alcanzó el máximo de 3 gestiones sociales.")
             return redirect("principal:area_social")
 
-        # 3. Crear la nueva Gestión
-        fecha_prog_str = request.POST.get("fecha_programada")
-        fecha_prog = fecha_prog_str if fecha_prog_str else None
-
+        fecha_prog = request.POST.get("fecha_programada") or None
         derivar_agenda = request.POST.get("derivar_agenda") == "True"
+        validacion = request.POST.get("validacion", "Pendiente") if es_supervisor else "Pendiente"
 
         GestionSocial.objects.create(
             caso=caso,
-            sub_atencion=request.POST.get("sub_atencion", "Orientación Social"),
-            accion_realizada=request.POST.get("accion_realizada", "Sin acción"),
+            sub_atencion=request.POST.get("sub_atencion") or "Orientación Social",
+            accion_realizada=request.POST.get("accion_realizada") or "Emergencia",
             fecha_programada=fecha_prog,
             detalle_accion=request.POST.get("detalle_accion", ""),
             evidencia_codigo=request.POST.get("evidencia", ""),
-            validacion=request.POST.get("validacion", "Pendiente"),
+            validacion=validacion,
             requiere_terreno=(request.POST.get("requiere_terreno") == "True"),
-            derivar_agenda=derivar_agenda
+            derivar_agenda=derivar_agenda,
         )
 
-        # 4. Derivar a Compromiso / Agenda Colectiva (EP-04)
         if derivar_agenda:
-            # Obtenemos la delegación del funcionario
-            perfil = getattr(request.user, "perfil", None)
-            if perfil:
-                import uuid
-                codigo_com = f"COM-SOC-{uuid.uuid4().hex[:4].upper()}"
-                Compromiso.objects.create(
-                    codigo=codigo_com,
-                    titulo=f"Derivación Social: {caso.usuario_nombre}",
-                    territorio=perfil.delegacion,
-                    responsable=request.user, # Se asigna al mismo funcionario por defecto
-                    area="Área Social",
-                    solicitante=caso.usuario_nombre,
-                    fecha=timezone.now().date(),
-                    plazo="Por definir" if not fecha_prog else str(fecha_prog)
-                )
+            _derivar_caso_a_agenda(request, caso, fecha_prog)
 
         messages.success(request, "Caso social y gestión registrados correctamente.")
         return redirect("principal:area_social")
-        
+
     return redirect("principal:area_social")
 
 
 @requiere_roles("Funcionario", "Supervisor")
 @transaction.atomic
 def editar_caso_social(request):
-    """Agrega la 2da o 3ra gestión a un caso existente."""
-    if request.method == "POST":
-        caso_id = request.POST.get("caso_id")
-        
+    """
+    Maneja 3 operaciones explícitas desde el modal del expediente:
+    - actualizar_ciudadano: modifica teléfono del caso.
+    - actualizar_gestion: corrige una gestión existente (bloqueada si ya está Aprobada).
+    - agregar_gestion: registra la 2ª o 3ª gestión sin sobrescribir las anteriores.
+    """
+    if request.method != "POST":
+        return redirect("principal:area_social")
+
+    caso_id = request.POST.get("caso_id")
+    modo = request.POST.get("modo", "agregar_gestion")
+    es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
+
+    try:
+        caso = CasoSocial.objects.get(id=caso_id)
+    except CasoSocial.DoesNotExist:
+        messages.error(request, "El caso especificado no existe.")
+        return redirect("principal:area_social")
+
+    if not es_supervisor and caso.funcionario_id != request.user.id:
+        messages.error(request, "Solo puedes modificar expedientes creados por ti.")
+        return redirect("principal:area_social")
+
+    if modo == "actualizar_ciudadano":
+        caso.telefono = (request.POST.get("telefono") or "").strip()
+        caso.save(update_fields=["telefono"])
+        messages.success(request, f"Teléfono actualizado para {caso.rut}.")
+        return redirect("principal:area_social")
+
+    if modo == "actualizar_gestion":
+        gestion_id = request.POST.get("gestion_id")
         try:
-            caso = CasoSocial.objects.get(id=caso_id)
-            
-            # Control estricto de máximo 3 atenciones
-            if caso.gestiones.count() >= 3:
-                messages.error(request, "Límite máximo alcanzado. No se pueden agregar más gestiones a este caso.")
-                return redirect("principal:area_social")
+            gestion = GestionSocial.objects.get(id=gestion_id, caso=caso)
+        except GestionSocial.DoesNotExist:
+            messages.error(request, "La gestión indicada no existe.")
+            return redirect("principal:area_social")
 
-            fecha_prog_str = request.POST.get("fecha_programada")
-            fecha_prog = fecha_prog_str if fecha_prog_str else None
+        if gestion.validacion in ("Aprobado", "Aprobada") and not es_supervisor:
+            messages.error(request, "Una gestión aprobada no permite modificaciones.")
+            return redirect("principal:area_social")
 
-            # Actualizamos datos del ciudadano por si cambiaron el teléfono
-            caso.telefono = request.POST.get("telefono", caso.telefono)
-            caso.save()
+        fecha_prog = request.POST.get("fecha_programada") or None
+        estaba_derivada = gestion.derivar_agenda
+        derivar_ahora = request.POST.get("derivar_agenda") == "True"
 
-            # Creamos la nueva gestión anidada
-            GestionSocial.objects.create(
-                caso=caso,
-                sub_atencion=request.POST.get("sub_atencion", ""),
-                accion_realizada=request.POST.get("accion_realizada", ""),
-                fecha_programada=fecha_prog,
-                detalle_accion=request.POST.get("detalle_accion", ""),
-                evidencia_codigo=request.POST.get("evidencia", ""),
-                validacion=request.POST.get("validacion", "Pendiente"),
-                requiere_terreno=(request.POST.get("requiere_terreno") == "True"),
-                derivar_agenda=(request.POST.get("derivar_agenda") == "True")
-            )
-            
-            messages.success(request, f"Gestión número {caso.gestiones.count()} registrada para {caso.rut}.")
-            
-        except CasoSocial.DoesNotExist:
-            messages.error(request, "El caso especificado no existe.")
-            
+        gestion.sub_atencion = request.POST.get("sub_atencion") or gestion.sub_atencion
+        gestion.accion_realizada = request.POST.get("accion_realizada") or gestion.accion_realizada
+        gestion.fecha_programada = fecha_prog
+        gestion.detalle_accion = request.POST.get("detalle_accion", "")
+        gestion.evidencia_codigo = request.POST.get("evidencia", "")
+        gestion.requiere_terreno = (request.POST.get("requiere_terreno") == "True")
+        gestion.derivar_agenda = derivar_ahora
+        if es_supervisor and request.POST.get("validacion"):
+            gestion.validacion = request.POST.get("validacion")
+        gestion.save()
+
+        if derivar_ahora and not estaba_derivada:
+            _derivar_caso_a_agenda(request, caso, fecha_prog)
+
+        messages.success(request, "Gestión actualizada correctamente.")
+        return redirect("principal:area_social")
+
+    # Modo por defecto: agregar_gestion (2ª o 3ª atención nueva)
+    if caso.gestiones.count() >= 3:
+        messages.error(request, "Límite máximo alcanzado (3 de 3). No se pueden agregar más gestiones.")
+        return redirect("principal:area_social")
+
+    fecha_prog = request.POST.get("fecha_programada") or None
+    derivar_agenda = request.POST.get("derivar_agenda") == "True"
+    validacion = request.POST.get("validacion", "Pendiente") if es_supervisor else "Pendiente"
+
+    GestionSocial.objects.create(
+        caso=caso,
+        sub_atencion=request.POST.get("sub_atencion") or "Orientación Social",
+        accion_realizada=request.POST.get("accion_realizada") or "Emergencia",
+        fecha_programada=fecha_prog,
+        detalle_accion=request.POST.get("detalle_accion", ""),
+        evidencia_codigo=request.POST.get("evidencia", ""),
+        validacion=validacion,
+        requiere_terreno=(request.POST.get("requiere_terreno") == "True"),
+        derivar_agenda=derivar_agenda,
+    )
+
+    if derivar_agenda:
+        _derivar_caso_a_agenda(request, caso, fecha_prog)
+
+    messages.success(request, f"Gestión {caso.gestiones.count()} de 3 registrada para {caso.rut}.")
     return redirect("principal:area_social")
