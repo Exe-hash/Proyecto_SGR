@@ -1,0 +1,27 @@
+<div class="dropdown">
+  <button
+    class="btn bg-white rounded-3 shadow-sm fw-bold dropdown-toggle"
+    type="button"
+    id="selectorPeriodo"
+    data-bs-toggle="dropdown"
+    aria-expanded="false"
+  >
+    Período: {{ periodo_activo.etiqueta }} ({{ periodo_activo.estado }})
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end rounded-3 shadow-sm" aria-labelledby="selectorPeriodo">
+    {% for p in periodos_disponibles %}
+    <li>
+      <a
+        class="dropdown-item d-flex justify-content-between align-items-center{% if p.codigo == periodo_activo.codigo %} active{% endif %}"
+        href="?periodo={{ p.codigo }}"
+        {% if p.codigo == periodo_activo.codigo %}aria-current="true"{% endif %}
+      >
+        {{ p.etiqueta }}
+        <span class="badge {% if p.estado == 'Abierto' %}bg-success{% else %}bg-secondary{% endif %} ms-2">
+          {{ p.estado }}
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
