@@ -523,6 +523,7 @@ class Compromiso(models.Model):
 
     codigo = models.CharField(max_length=20, unique=True, db_index=True, verbose_name="Código")
     titulo = models.CharField(max_length=255, verbose_name="Título del compromiso")
+    descripcion = models.TextField(blank=True, default="", verbose_name="Descripción / Instrucciones")
     territorio = models.ForeignKey(Delegacion, on_delete=models.PROTECT, verbose_name="Delegación")
     sector = models.ForeignKey(
         Territorio,

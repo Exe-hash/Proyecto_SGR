@@ -12,7 +12,6 @@ from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 
-from .datos_demo import COMPROMISOS, EQUIPO, EVIDENCIAS, METAS
 from .forms import UsuarioCRUDForm
 from .models import (
     CasoSocial,
@@ -24,11 +23,15 @@ from .models import (
     Observacion,
 )
 
+from .periodos import contexto_periodo_actual
+
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404
-from .models import AjusteDesempeno, Vecino
+from .models import AjusteDesempeno, Territorio, Vecino
+
+from datetime import date
 
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
@@ -77,9 +80,14 @@ def contexto_usuario(request, **contexto):
             "delegacion_usuario": perfil.delegacion.nombre if perfil else "Sin delegación asignada",
         }
     )
+    contexto.update(contexto_periodo_actual(request))  # <--- AQUÍ VA
 
     return contexto
 
+def _rango_periodo_activo(request):
+    """Devuelve (fecha_inicio, fecha_fin) del trimestre seleccionado en la barra superior."""
+    periodo = contexto_periodo_actual(request)["periodo_activo"]
+    return periodo["fecha_inicio"], periodo["fecha_fin"]
 
 def renderizar(request, plantilla, contexto=None):
     """Renderiza una plantilla incluyendo el contexto del usuario conectado."""
@@ -100,10 +108,7 @@ def destino_por_rol(usuario):
 
 def landing(request):
     """Página pública de bienvenida del SGR."""
-    contexto = {}
-    if request.user.is_authenticated:
-        contexto["destino_usuario"] = destino_por_rol(request.user)
-    return render(request, "principal/landing.html", contexto)
+    return render(request, "principal/landing.html")
 
 def inicio(request):
     if request.method == "POST":
@@ -124,11 +129,11 @@ def inicio(request):
             elif usuario_tiene_rol(usuario, "Supervisor"):
                 return redirect("principal:equipo")
             else:
-                # NUEVO: Si el cargo contiene la palabra "social", va a su panel especial
+                
                 if hasattr(usuario, 'perfil') and usuario.perfil.cargo and 'social' in usuario.perfil.cargo.nombre.lower():
                     return redirect("principal:area_social")
                 
-                # Si es territorial, va al panel normal
+                
                 return redirect("principal:panel")
 
         return render(
@@ -204,23 +209,26 @@ def agenda(request):
         codigo_recibido = request.POST.get("codigo")
         nuevo_estado = request.POST.get("nuevo_estado")
         nuevo_texto = request.POST.get("observacion")
-        
+
         if codigo_recibido and nuevo_estado:
-            compromiso = Compromiso.objects.get(codigo=codigo_recibido)
+            compromiso = get_object_or_404(Compromiso, codigo=codigo_recibido)
             compromiso.estado = nuevo_estado
             compromiso.save()
-            
+
             if nuevo_texto:
                 Observacion.objects.create(
                     compromiso=compromiso,
                     autor=request.user,
-                    texto=nuevo_texto
+                    texto=nuevo_texto,
                 )
-            
+
         return redirect("principal:agenda")
 
-    compromisos_reales = Compromiso.objects.all()
-    
+    inicio_periodo, fin_periodo = _rango_periodo_activo(request)
+    compromisos_reales = Compromiso.objects.filter(
+        fecha__range=(inicio_periodo, fin_periodo)
+    )
+
     return renderizar(
         request,
         "principal/agenda.html",
@@ -233,8 +241,12 @@ def agenda(request):
 
 @requiere_roles("Funcionario")
 def evidencias(request):
-    mis_evidencias = Evidencia.objects.filter(funcionario=request.user)
-    
+    inicio_periodo, fin_periodo = _rango_periodo_activo(request)
+    mis_evidencias = Evidencia.objects.filter(
+        funcionario=request.user,
+        fecha_registro__range=(inicio_periodo, fin_periodo),
+    )
+
     totales = mis_evidencias.count()
     aprobadas = mis_evidencias.filter(estado="Aprobada").count()
     pendientes = totales - aprobadas
@@ -244,7 +256,7 @@ def evidencias(request):
         "principal/evidencias.html",
         {
             "pagina": "evidencias",
-            "evidencias_reales": mis_evidencias, # Enviamos los datos verdaderos
+            "evidencias_reales": mis_evidencias,
             "totales": totales,
             "aprobadas": aprobadas,
             "pendientes": pendientes,
@@ -252,42 +264,46 @@ def evidencias(request):
     )
 
 
-from django.contrib.auth.models import User
 
 @requiere_roles("Supervisor", "Administrador")
 def equipo(request):
-    todas_evidencias = Evidencia.objects.all()
+    inicio_periodo, fin_periodo = _rango_periodo_activo(request)
+    todas_evidencias = Evidencia.objects.filter(
+        fecha_registro__range=(inicio_periodo, fin_periodo)
+    )
     total_aprobadas = todas_evidencias.filter(estado="Aprobada").count()
     total_revision = todas_evidencias.filter(estado="En revisión").count()
     total_general = todas_evidencias.count()
-    
-    # Calculamos el avance global de todo el equipo
+
     avance_global = int((total_aprobadas / total_general * 100)) if total_general > 0 else 0
 
-    funcionarios_db = User.objects.filter(groups__name="Funcionario")
+    funcionarios_db = User.objects.filter(groups__name="Funcionario").select_related("perfil__cargo")
     equipo_calculado = []
-    
-    # Calculamos el desempeño individual de cada funcionario
+
     for f in funcionarios_db:
-        evs = Evidencia.objects.filter(funcionario=f)
+        evs = todas_evidencias.filter(funcionario=f)
         aprob = evs.filter(estado="Aprobada").count()
         tot = evs.count()
         porcentaje = int((aprob / tot * 100)) if tot > 0 else 0
-        
+
         clase = "aprobada" if porcentaje >= 60 else ("corregir" if porcentaje >= 40 else "rechazada")
         estado = "Óptimo" if porcentaje >= 60 else ("En riesgo" if porcentaje >= 40 else "Crítico")
-        
-        # Obtenemos iniciales para el avatar (Ej: CC para Catherine Contreras)
-        iniciales = f"{f.first_name[:1]}{f.last_name[:1]}" if f.first_name else "F"
-        
+
+        iniciales = f"{f.first_name[:1]}{f.last_name[:1]}" if f.first_name else (f.username[:2] or "F")
+        cargo_real = (
+            f.perfil.cargo.nombre
+            if hasattr(f, "perfil") and f.perfil.cargo
+            else "Sin cargo"
+        )
+
         equipo_calculado.append({
             "nombre": f.get_full_name() or f.username,
             "iniciales": iniciales.upper(),
-            "cargo": "Territorial", 
+            "cargo": cargo_real,
             "porcentaje": porcentaje,
             "barra": porcentaje,
             "clase": clase,
-            "estado": estado
+            "estado": estado,
         })
 
     return renderizar(
@@ -299,7 +315,7 @@ def equipo(request):
             "total_aprobadas": total_aprobadas,
             "total_revision": total_revision,
             "total_general": total_general,
-            "equipo": equipo_calculado, # Enviamos la lista procesada
+            "equipo": equipo_calculado,
         },
     )
 
@@ -433,14 +449,21 @@ def desactivar_usuario(request, usuario_id):
 
 @requiere_roles("Funcionario", "Supervisor")
 def panel(request):
-    mis_evidencias = Evidencia.objects.filter(funcionario=request.user)
+    inicio_periodo, fin_periodo = _rango_periodo_activo(request)
+    mis_evidencias = Evidencia.objects.filter(
+        funcionario=request.user,
+        fecha_registro__range=(inicio_periodo, fin_periodo),
+    )
     ev_aprobadas = mis_evidencias.filter(estado="Aprobada").count()
     ev_revision = mis_evidencias.filter(estado="En revisión").count()
     ev_rechazadas = mis_evidencias.filter(estado="Rechazada").count()
 
     total_ev = mis_evidencias.count()
     porcentaje_avance = int((ev_aprobadas / total_ev * 100)) if total_ev > 0 else 0
-    compromisos_vencer = Compromiso.objects.filter(responsable=request.user).order_by("plazo")[:4]
+    compromisos_vencer = Compromiso.objects.filter(
+        responsable=request.user,
+        fecha__range=(inicio_periodo, fin_periodo),
+    ).order_by("fecha_limite", "plazo")[:4]
 
     # --- FILTRO ESTRICTO POR CARGO DEL USUARIO ---
     perfil = getattr(request.user, "perfil", None)
@@ -465,7 +488,7 @@ def panel(request):
             "ponderacion": m.ponderacion,
             "avance": avance_real,
             "meta": m.valor_objetivo,
-            "barra": min(int(cumplimiento), 100),  # Ancho visual máximo 100%
+            "barra": min(int(cumplimiento), 100),
             "resultado": round(resultado, 1),
         })
 
@@ -692,7 +715,7 @@ def editar_caso_social(request):
         messages.success(request, "Gestión actualizada correctamente.")
         return redirect("principal:area_social")
 
-    # Modo por defecto: agregar_gestion (2ª o 3ª atención nueva)
+    
     if caso.gestiones.count() >= 3:
         messages.error(request, "Límite máximo alcanzado (3 de 3). No se pueden agregar más gestiones.")
         return redirect("principal:area_social")
@@ -816,3 +839,178 @@ def api_buscar_vecino(request):
         })
 
     return JsonResponse({"encontrado": False})
+
+@requiere_roles("Supervisor", "Administrador")
+def asignar_tareas(request):
+    hoy = timezone.localdate()
+
+    # --- CREAR O EDITAR TAREA (POST) ---
+    if request.method == "POST":
+        accion = request.POST.get("accion", "crear")
+        funcionario_id = request.POST.get("funcionario_id")
+        territorio_id = request.POST.get("territorio_id") or None
+        titulo = request.POST.get("titulo", "").strip()
+        descripcion = request.POST.get("descripcion", "").strip()
+        prioridad = request.POST.get("prioridad", "Media")
+        fecha_limite_str = request.POST.get("fecha_limite", "").strip()
+        ingresa_al_tubo = request.POST.get("ingresa_al_tubo") == "1"
+
+        if prioridad not in {"Baja", "Media", "Alta", "Urgente"}:
+            prioridad = "Media"
+
+        if not (funcionario_id and titulo and fecha_limite_str):
+            messages.error(request, "Completa el funcionario, el título y la fecha límite.")
+            return redirect("principal:asignar_tareas")
+
+        try:
+            fecha_limite = date.fromisoformat(fecha_limite_str)
+        except ValueError:
+            messages.error(request, "La fecha límite no tiene un formato válido.")
+            return redirect("principal:asignar_tareas")
+
+        responsable = get_object_or_404(User, pk=funcionario_id, is_active=True)
+        sector = Territorio.objects.filter(pk=territorio_id).first() if territorio_id else None
+
+        perfil_resp = getattr(responsable, "perfil", None)
+        perfil_actual = getattr(request.user, "perfil", None)
+        delegacion = (
+            (perfil_resp.delegacion if perfil_resp and perfil_resp.delegacion else None)
+            or (perfil_actual.delegacion if perfil_actual and perfil_actual.delegacion else None)
+            or Delegacion.objects.first()
+        )
+        if delegacion is None:
+            delegacion = Delegacion.objects.create(nombre="Casa Central")
+
+        dias = (fecha_limite - hoy).days
+        if dias > 0:
+            plazo_txt = f"{dias} días"
+        elif dias == 0:
+            plazo_txt = "Hoy"
+        else:
+            plazo_txt = f"Vencido ({abs(dias)} días)"
+
+        if accion == "editar":
+            tarea_id = request.POST.get("tarea_id")
+            compromiso = get_object_or_404(Compromiso, pk=tarea_id)
+            compromiso.responsable = responsable
+            compromiso.territorio = delegacion
+            compromiso.sector = sector
+            compromiso.titulo = titulo[:255]
+            compromiso.descripcion = descripcion
+            compromiso.prioridad = prioridad
+            compromiso.fecha_limite = fecha_limite
+            compromiso.plazo = plazo_txt
+            compromiso.save()
+            messages.success(request, f"Tarea {compromiso.codigo} actualizada correctamente.")
+        else:
+            codigo = f"TAR-{hoy.strftime('%Y%m')}-{uuid.uuid4().hex[:5].upper()}"
+            solicitante = (request.user.get_full_name().strip() or request.user.get_username())[:150]
+            Compromiso.objects.create(
+                codigo=codigo,
+                titulo=titulo[:255],
+                descripcion=descripcion,
+                territorio=delegacion,
+                sector=sector,
+                responsable=responsable,
+                creado_por=request.user,
+                estado="Pendiente",
+                prioridad=prioridad,
+                area="Tubo de trabajo" if ingresa_al_tubo else "Asignación directa",
+                solicitante=solicitante,
+                fecha=hoy,
+                plazo=plazo_txt,
+                fecha_limite=fecha_limite,
+            )
+            messages.success(request, f"Tarea {codigo} asignada a {responsable.get_full_name() or responsable.username}.")
+
+        return redirect("principal:asignar_tareas")
+
+    # --- LISTADO, RESUMEN Y FILTROS (GET) ---
+    inicio_periodo, fin_periodo = _rango_periodo_activo(request)
+    base_qs = (
+        Compromiso.objects.filter(fecha__range=(inicio_periodo, fin_periodo))
+        .select_related("responsable", "sector", "territorio")
+        .order_by("-fecha", "-id")
+    )
+
+    resumen = {"pendientes": 0, "en_proceso": 0, "completadas": 0, "vencidas": 0}
+    for c in base_qs:
+        esta_vencida = bool(c.fecha_limite and c.fecha_limite < hoy and c.estado not in ("Completado", "Rechazado"))
+        if c.estado == "Completado":
+            resumen["completadas"] += 1
+        elif c.estado == "Vencido" or esta_vencida:
+            resumen["vencidas"] += 1
+        elif c.estado == "En proceso":
+            resumen["en_proceso"] += 1
+        else:
+            resumen["pendientes"] += 1
+
+    qs = base_qs
+    filtro_func = request.GET.get("funcionario_id", "").strip()
+    filtro_estado = request.GET.get("estado", "").strip()
+    filtro_prioridad = request.GET.get("prioridad", "").strip()
+
+    if filtro_func.isdigit():
+        qs = qs.filter(responsable_id=int(filtro_func))
+    if filtro_prioridad:
+        qs = qs.filter(prioridad=filtro_prioridad)
+    if filtro_estado == "Completada":
+        qs = qs.filter(estado="Completado")
+    elif filtro_estado == "Vencida":
+        qs = qs.filter(
+            Q(estado="Vencido") | (Q(fecha_limite__lt=hoy) & ~Q(estado__in=["Completado", "Rechazado"]))
+        )
+    elif filtro_estado in ("Pendiente", "En proceso"):
+        qs = qs.filter(estado=filtro_estado)
+
+    tareas = []
+    for c in qs:
+        esta_vencida = bool(c.fecha_limite and c.fecha_limite < hoy and c.estado not in ("Completado", "Rechazado"))
+        if c.estado == "Completado":
+            estado_ui = "Completada"
+        elif c.estado == "Vencido" or esta_vencida:
+            estado_ui = "Vencida"
+        else:
+            estado_ui = c.estado
+
+        tareas.append(
+            {
+                "id": c.id,
+                "codigo": c.codigo,
+                "titulo": c.titulo,
+                "descripcion": c.descripcion,
+                "funcionario": c.responsable.get_full_name().strip() or c.responsable.get_username(),
+                "funcionario_id": c.responsable_id,
+                "territorio": c.sector.nombre if c.sector else None,
+                "territorio_id": c.sector_id,
+                "prioridad": c.prioridad,
+                "fecha_limite": c.fecha_limite or c.fecha,
+                "esta_vencida": esta_vencida,
+                "estado": estado_ui,
+            }
+        )
+
+    usuarios_qs = User.objects.filter(is_active=True, groups__name="Funcionario").select_related("perfil__cargo").distinct()
+    if not usuarios_qs.exists():
+        usuarios_qs = User.objects.filter(is_active=True).select_related("perfil__cargo")
+
+    funcionarios = [
+        {
+            "id": u.id,
+            "nombre": u.get_full_name().strip() or u.get_username(),
+            "cargo": u.perfil.cargo.nombre if hasattr(u, "perfil") and u.perfil.cargo else "Sin cargo",
+        }
+        for u in usuarios_qs.order_by("first_name", "username")
+    ]
+
+    return renderizar(
+        request,
+        "principal/asignar_tareas.html",
+        {
+            "pagina": "asignar_tareas",
+            "resumen": resumen,
+            "tareas": tareas,
+            "funcionarios": funcionarios,
+            "territorios": Territorio.objects.all().order_by("nombre"),
+        },
+    )
