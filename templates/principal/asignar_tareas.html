@@ -103,7 +103,7 @@ Variables que debe entregar la vista (pendiente de implementar en views.py):
 <!-- ===== 3. Filtros ===== -->
 <div class="card bg-white shadow-sm border-0 rounded-4 mb-4">
     <div class="card-body p-4">
-    <form method="get" action="#" class="row g-3 align-items-end">
+    <form method="get" action="{% url 'principal:asignar_tareas' %}" class="row g-3 align-items-end">
         <div class="col-md-6 col-lg-3">
         <label for="filtroFuncionario" class="form-label fw-semibold small">Funcionario</label>
         <select id="filtroFuncionario" name="funcionario_id" class="form-select">
@@ -135,7 +135,7 @@ Variables que debe entregar la vista (pendiente de implementar en views.py):
         </div>
         <div class="col-md-6 col-lg-3 d-flex gap-2">
         <button type="submit" class="btn btn-sgr fw-bold flex-grow-1">Filtrar</button>
-        <a href="?" class="btn btn-outline-secondary">Limpiar</a>
+        <a href="{% url 'principal:asignar_tareas' %}" class="btn btn-outline-secondary">Limpiar</a>
         </div>
     </form>
     </div>
@@ -234,7 +234,7 @@ Variables que debe entregar la vista (pendiente de implementar en views.py):
 <div class="modal fade" id="modalAsignarTarea" tabindex="-1" aria-labelledby="modalAsignarTareaLabel" aria-hidden="true">
 <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 rounded-4">
-    <form method="post" action="#">
+    <form method="post" action="{% url 'principal:asignar_tareas' %}">
         {% csrf_token %}
         <div class="modal-header border-0 pb-0">
         <h5 class="modal-title fw-bold" id="modalAsignarTareaLabel">Asignar nueva tarea</h5>
@@ -304,7 +304,7 @@ Variables que debe entregar la vista (pendiente de implementar en views.py):
 <div class="modal fade" id="modalEditarTarea" tabindex="-1" aria-labelledby="modalEditarTareaLabel" aria-hidden="true">
 <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 rounded-4">
-    <form method="post" action="#">
+    <form method="post" action="{% url 'principal:asignar_tareas' %}">
         {% csrf_token %}
         <input type="hidden" name="accion" value="editar">
         <input type="hidden" name="tarea_id" id="editarTareaId">
@@ -366,7 +366,7 @@ Variables que debe entregar la vista (pendiente de implementar en views.py):
 </div>
 
 <script>
-  // Rellena el modal de edición con los datos de la tarea seleccionada.
+
 document.addEventListener("DOMContentLoaded", function () {
     var modal = document.getElementById("modalEditarTarea");
     if (!modal) return;

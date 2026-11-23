@@ -1,4 +1,4 @@
-/* Interacciones de presentación; no envían ni guardan información. */
+
 (() => {
   const toast = document.querySelector('#toast');
   let toastTimer;
@@ -28,10 +28,6 @@
   document.querySelectorAll('[data-dialog-close]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 
   const activityForm = document.querySelector('#activity-form');
-  activityForm?.addEventListener('submit', event => {
-    event.preventDefault();
-    notify('Formulario válido como vista previa. El registro aún no se guarda.');
-  });
   const commitmentToggle = document.querySelector('#commitment-toggle');
   const toggleCommitmentFields = () => document.querySelectorAll('.commitment-fields').forEach(row => { row.hidden = !commitmentToggle.checked; });
   commitmentToggle?.addEventListener('change', toggleCommitmentFields);

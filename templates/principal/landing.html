@@ -22,11 +22,7 @@
                 y dar seguimiento al trabajo de sus delegaciones territoriales.
             </p>
 
-            {% if user.is_authenticated %}
-                <a href="{% url destino_usuario %}" class="btn btn-light btn-lg fw-bold text-brand px-5">IR A MI PANEL</a>
-            {% else %}
-                <a href="{% url 'principal:inicio' %}" class="btn btn-light btn-lg fw-bold text-brand px-5">INGRESAR</a>
-            {% endif %}
+<a href="{% url 'principal:inicio' %}" class="btn btn-light btn-lg fw-bold text-brand px-5">INICIAR SESIÓN</a>
         </div>
     </header>
 

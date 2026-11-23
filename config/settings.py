@@ -74,10 +74,11 @@ DATABASES = {
         "HOST": os.environ.get("SGR_DB_HOST", "localhost"),
         "PORT": os.environ.get("SGR_DB_PORT", "3306"),
         "OPTIONS": {
-            "charset": "utf8mb4",
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES', default_storage_engine=INNODB",
         },
     }
 }
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -111,3 +112,21 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'tu_correo_proyecto@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'tu_password_de_aplicacion')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# --- SEGURIDAD DE SESIONES Y TOKENS ---
+LOGIN_URL = "principal:inicio"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas (jornada laboral)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# Expiración estricta de tokens de recuperación de contraseña (1 hora)
+PASSWORD_RESET_TIMEOUT = 3600
+
+# Endurecimiento HTTPS (activar con DJANGO_USE_HTTPS=1 cuando haya SSL)
+USE_HTTPS = os.environ.get("DJANGO_USE_HTTPS", "0") == "1"
+SESSION_COOKIE_SECURE = USE_HTTPS
+CSRF_COOKIE_SECURE = USE_HTTPS
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"

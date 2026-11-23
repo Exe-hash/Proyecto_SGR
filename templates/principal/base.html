@@ -99,14 +99,14 @@
         <svg class="icon" aria-hidden="true">
           <use href="#icon-user"></use>
         </svg>
-        Resumen de equipo
+        <span>Resumen de equipo</span>
       </a>
-      
-      <a href="{% url 'principal:verificacion' %}" class="nav-link {% if pagina == 'verificacion' %}active{% endif %}">
+
+      <a href="{% url 'principal:asignar_tareas' %}" class="nav-link {% if pagina == 'asignar_tareas' %}active{% endif %}">
         <svg class="icon" aria-hidden="true">
-          <use href="#icon-file"></use>
+          <use href="#icon-user"></use>
         </svg>
-        Verificación de actividades
+        <span>Asignar Tareas</span>
       </a>
       {% endif %}
       
@@ -134,8 +134,7 @@
         <button type="submit" style="width: 100%; background: none; border: 1px solid #ef4444; color: #ef4444; padding: 0.5rem; border-radius: 6px; cursor: pointer;">Cerrar sesión</button>
       </form>
     </nav>
-    <div class="sidebar-foot"><span>SGR · Vista de demostración</span><a href="{% url 'principal:inicio' %}">Cambiar
-        vista</a></div>
+    <div class="sidebar-foot"><span>SGR · Ilustre Municipalidad de La Serena</span></div>
   </aside>
   <div class="app-content">
     <header class="topbar">
@@ -154,15 +153,9 @@
         </div>
       </div>
 
-      <label class="period">
-        <span class="sr-only">Período seleccionado</span>
+{% include "principal/partials/selector_periodo.html" %}
 
-        <select aria-label="Período seleccionado">
-          <option>Período: Trimestre Jul - Sep 2026 (Abierto)</option>
-        </select>
-      </label>
     </header>
-    <div class="demo-note" role="note"><strong>Demostración:</strong> datos ficticios; los cambios no se guardan.</div>
     <main class="main-content">{% block content %}{% endblock %}</main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
