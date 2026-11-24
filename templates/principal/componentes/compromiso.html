@@ -1,26 +1,38 @@
-<button type="button" class="commitment-card" data-commitment 
-  data-code="{{ c.codigo }}" 
-  data-title="{{ c.titulo }}" 
-  data-territory="{{ c.territorio.nombre }}" 
-  data-responsible="{{ c.responsable.get_full_name|default:c.responsable.username }}" 
-  data-state="{{ c.estado }}" 
-  data-area="{{ c.area }}" 
-  data-requester="{{ c.solicitante }}" 
-  data-date="{{ c.fecha|date:'Y-m-d' }}">
-  
+<button type="button" class="commitment-card" data-commitment
+  data-code="{{ c.codigo }}"
+  data-title="{{ c.titulo }}"
+  data-territory="{{ c.territorio.nombre }}"
+  data-sector="{% if c.sector %}{{ c.sector.nombre }}{% endif %}"
+  data-responsible="{{ c.responsable.get_full_name|default:c.responsable.username }}"
+  data-state="{{ c.estado }}"
+  data-area="{{ c.area }}"
+  data-requester="{{ c.solicitante }}"
+  data-rut="{% if c.vecino %}{{ c.vecino.rut }}{% endif %}"
+  data-date="{{ c.fecha|date:'Y-m-d' }}"
+  data-duedate="{% if c.fecha_limite %}{{ c.fecha_limite|date:'Y-m-d' }}{% else %}{{ c.fecha|date:'Y-m-d' }}{% endif %}"
+  data-editable="{% if c.puede_editar_ui %}1{% else %}0{% endif %}"
+  data-bloqueado="{% if c.esta_bloqueado_ui %}1{% else %}0{% endif %}"
+  data-dueno="{% if c.es_dueno_ui %}1{% else %}0{% endif %}">
+
   <span class="commitment-top">
-    <span class="territory">Territorio: {{ c.territorio.nombre }}</span>
+    <span class="territory">{{ c.territorio.nombre }}{% if c.sector %} · {{ c.sector.nombre }}{% endif %}</span>
     <span class="due"><svg class="icon"><use href="#icon-clock"/></svg> {{ c.plazo|upper }}</span>
   </span>
-  
-  <strong>{{ c.titulo }}</strong>
+
+  <strong>{{ c.codigo }} — {{ c.titulo }}</strong>
   <small>Resp: {{ c.responsable.get_full_name|default:c.responsable.username }}</small>
-  
-  <!-- Historial oculto para que lo lea el JavaScript -->
+  <small class="d-block text-muted">Solicitante: {{ c.solicitante }}{% if c.vecino %} ({{ c.vecino.rut }}){% endif %}</small>
+
+  {% if c.esta_bloqueado_ui %}
+    <span class="badge bg-success mt-2">Bloqueado (Aprobado / Completado)</span>
+  {% elif not c.puede_editar_ui %}
+    <span class="badge bg-secondary mt-2">Solo consulta</span>
+  {% endif %}
+
   <div class="historial-oculto" style="display: none;">
     {% for obs in c.observaciones.all %}
       <p class="history-entry" style="margin-bottom: 8px;">
-        <span style="color: #9ca3af;">●</span> 
+        <span style="color: #9ca3af;">●</span>
         {{ obs.autor.get_full_name|default:obs.autor.username }} ({{ obs.fecha|date:"d/m/Y, H:i" }}) - {{ obs.texto }}
       </p>
     {% empty %}

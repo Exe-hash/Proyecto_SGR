@@ -4,81 +4,108 @@
 {% block content %}
 <div class="container-fluid px-0">
   <div class="mb-4">
-    <h1 class="mb-1">Revisión de Evidencias Pendientes</h1>
-    <p class="text-muted">Evalúa las evidencias enviadas para aprobar, rechazar o solicitar correcciones</p>
+    <h1 class="mb-1">Revisión de Evidencias y Gestiones Pendientes</h1>
+    <p class="text-muted mb-0">Dictamina registros como Aprobada, Rechazada o Solicitud de más antecedentes. Un registro aprobado no admite cambios.</p>
   </div>
 
   <div class="row g-4">
-    
     <div class="col-lg-5">
       <div class="card shadow-sm border-0 rounded-4 h-100">
         <div class="card-header bg-white py-3 border-bottom">
           <h5 class="fw-bold mb-3">Bandeja de Pendientes ({{ total_pendientes }})</h5>
-          <input type="search" class="form-control mb-3" placeholder="Buscar evidencia..." data-filter-input="revision">
-          
-          <ul class="nav nav-pills nav-fill gap-2" role="tablist">
-            <li class="nav-item"><a class="nav-link active fw-bold" href="#">Nuevas</a></li>
-            <li class="nav-item"><a class="nav-link fw-bold border" href="#">Corregidas</a></li>
+          <input type="search" id="filtro-verificacion" class="form-control mb-3" placeholder="Buscar por código, título o funcionario...">
+
+          <ul class="nav nav-pills nav-fill gap-2" id="tabs-verificacion" role="tablist">
+            <li class="nav-item">
+              <button type="button" class="nav-link active fw-bold w-100" data-tab-filtro="todas">Todas ({{ total_pendientes }})</button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link fw-bold border w-100" data-tab-filtro="nuevas">Pendientes ({{ total_nuevas }})</button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link fw-bold border w-100" data-tab-filtro="antecedentes">Antecedentes ({{ total_antecedentes }})</button>
+            </li>
           </ul>
         </div>
-        
-        
-        <div class="list-group list-group-flush overflow-auto" style="max-height: 600px;">
-          {% for e in evidencias %}
-            <button type="button" class="list-group-item list-group-item-action p-3 review-item" 
-              data-code="{{ e.codigo }}" 
-              data-title="{{ e.solicitud }}" 
-              data-date="{{ e.fecha_registro|date:'d/m/Y' }}"
-              data-author="{{ e.funcionario.get_full_name|default:e.funcionario.username }}"
-              data-image="{% if e.fotografia %}{{ e.fotografia.url }}{% else %}none{% endif %}">
-              
-              <div class="d-flex w-100 justify-content-between mb-1">
-                <strong class="mb-1 text-truncate" style="max-width: 80%;">{{ e.codigo }} – {{ e.solicitud }}</strong>
-                <small class="text-muted text-nowrap ms-2">{{ e.fecha_registro|date:'d/m/Y' }}</small>
+
+        <div class="list-group list-group-flush overflow-auto" style="max-height: 620px;" id="lista-revision">
+          {% for r in registros %}
+            <button type="button" class="list-group-item list-group-item-action p-3 review-item"
+              data-tipo="{{ r.tipo }}"
+              data-tipo-etiqueta="{{ r.tipo_etiqueta }}"
+              data-id="{{ r.id }}"
+              data-code="{{ r.codigo }}"
+              data-title="{{ r.titulo }}"
+              data-action="{{ r.accion }}"
+              data-date="{{ r.fecha|date:'d/m/Y' }}"
+              data-author="{{ r.autor }}"
+              data-estado="{{ r.estado }}"
+              data-grupo="{{ r.grupo_tab }}"
+              data-subtipo="{{ r.subtipo }}"
+              data-contacto="{{ r.contacto }}"
+              data-observacion="{{ r.observacion_previa }}"
+              data-archivo="{{ r.archivo_url }}"
+              data-es-imagen="{% if r.es_imagen %}1{% else %}0{% endif %}"
+              data-motivos="{{ r.motivos_sin_puntaje|join:' | ' }}">
+
+              <div class="d-flex w-100 justify-content-between align-items-start mb-1 gap-2">
+                <strong class="text-truncate">{{ r.codigo }} – {{ r.titulo }}</strong>
+                <small class="text-nowrap">{{ r.fecha|date:'d/m/Y' }}</small>
               </div>
-              <small class="text-muted d-block">Por: {{ e.funcionario.get_full_name|default:e.funcionario.username }}</small>
+              <div class="d-flex justify-content-between align-items-center small">
+                <span>Por: {{ r.autor }}</span>
+                <span class="badge {% if r.tipo == 'social' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ r.tipo_etiqueta }}</span>
+              </div>
             </button>
           {% empty %}
-            <div class="p-5 text-center text-muted">No hay evidencias pendientes en este momento. ¡Todo al día!</div>
+            <div class="p-5 text-center text-muted">No hay registros pendientes en este momento.</div>
           {% endfor %}
         </div>
       </div>
     </div>
-    
-    
+
     <div class="col-lg-7">
       <div class="card shadow-sm border-0 rounded-4 h-100">
         <div class="card-body p-4 d-flex flex-column">
-          <h5 class="fw-bold border-bottom pb-3 mb-4">Evidencia Seleccionada</h5>
-          
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
+            <h5 class="fw-bold mb-0">Registro Seleccionado</h5>
+            <span id="review-badge" class="badge bg-secondary">-</span>
+          </div>
+
           <form method="post" id="form-verificacion" class="d-flex flex-column flex-grow-1">
             {% csrf_token %}
+            <input type="hidden" name="tipo_registro" id="hidden-review-type">
+            <input type="hidden" name="registro_id" id="hidden-review-id">
             <input type="hidden" name="codigo" id="hidden-review-code">
             <input type="hidden" name="nuevo_estado" id="hidden-review-state">
 
-            <h4 class="fw-bold text-primary mb-3" id="review-title">Selecciona un registro de la lista...</h4>
-            
-            <div class="d-flex flex-wrap gap-4 text-muted small mb-4 bg-light p-3 rounded">
-              <span><strong>Funcionario:</strong> <span id="review-author">-</span></span>
-              <span><strong>Fecha:</strong> <span id="review-date">-</span></span>
-              <span><strong>Código:</strong> <span id="review-code">-</span></span>
+            <h4 class="fw-bold text-primary mb-2" id="review-title">Selecciona un registro de la lista...</h4>
+            <p class="text-muted small mb-3" id="review-action"></p>
+
+            <div class="row g-2 text-muted small mb-3 bg-light p-3 rounded">
+              <div class="col-md-6"><strong>Funcionario:</strong> <span id="review-author">-</span></div>
+              <div class="col-md-3"><strong>Fecha:</strong> <span id="review-date">-</span></div>
+              <div class="col-md-3"><strong>Código:</strong> <span id="review-code">-</span></div>
+              <div class="col-md-6"><strong>Ítem / Subtipo:</strong> <span id="review-subtipo">-</span></div>
+              <div class="col-md-6"><strong>Contacto:</strong> <span id="review-contacto">-</span></div>
             </div>
-          
-            <!-- Contenedor de la Imagen -->
-            <div id="evidence-image-container" class="bg-light border rounded-3 d-flex flex-column align-items-center justify-content-center text-muted mb-4 overflow-hidden" style="min-height: 300px;">
+
+            <div id="review-warning" class="alert alert-warning py-2 small d-none mb-3"></div>
+
+            <div id="evidence-image-container" class="bg-light border rounded-3 d-flex flex-column align-items-center justify-content-center text-muted mb-4 overflow-hidden" style="min-height: 260px; max-height: 360px;">
               <span class="fs-1 mb-2">📸</span>
-              <span>Vista previa de la evidencia</span>
-              <small>La fotografía se cargará al seleccionar un registro.</small>
+              <span>Vista previa del archivo de respaldo</span>
+              <small>Se cargará al seleccionar un registro.</small>
             </div>
-          
+
             <div class="mt-auto">
-              <label class="form-label fw-bold">¿La evidencia acredita la actividad realizada?</label>
-              <textarea id="review-comment" name="observacion" class="form-control mb-4" rows="3" placeholder="Escribe una observación, justificación o el motivo de rechazo..."></textarea>
-              
+              <label class="form-label fw-bold">Observación de verificación</label>
+              <textarea id="review-comment" name="observacion" class="form-control mb-4" rows="3" placeholder="Obligatoria para rechazar o solicitar más antecedentes..."></textarea>
+
               <div class="d-flex justify-content-end gap-2 flex-wrap">
-                <button type="button" class="btn btn-danger px-4" onclick="enviarRevision('Rechazada')">Rechazar</button>
-                <button type="button" class="btn btn-warning px-4" onclick="enviarRevision('Corregir')">Solicitar Corrección</button>
-                <button type="button" class="btn btn-success px-4" onclick="enviarRevision('Aprobada')">Aprobar Evidencia</button>
+                <button type="button" class="btn btn-danger px-3" onclick="enviarRevision('Rechazada')">Rechazar</button>
+                <button type="button" class="btn btn-warning px-3" onclick="enviarRevision('Solicitud de más antecedentes')">Solicitar más antecedentes</button>
+                <button type="button" class="btn btn-success px-4" onclick="enviarRevision('Aprobada')">Aprobar</button>
               </div>
             </div>
           </form>
@@ -89,62 +116,89 @@
 </div>
 
 <script>
-  document.addEventListener("DOMContentLoaded", function() {
-    const items = document.querySelectorAll('.review-item');
-    const imgContainer = document.getElementById('evidence-image-container');
+document.addEventListener("DOMContentLoaded", function () {
+  const items = Array.from(document.querySelectorAll(".review-item"));
+  const imgContainer = document.getElementById("evidence-image-container");
+  const warningBox = document.getElementById("review-warning");
+  const filtroInput = document.getElementById("filtro-verificacion");
+  const tabBtns = document.querySelectorAll("[data-tab-filtro]");
+  let tabActual = "todas";
 
-    function loadEvidence(btn) {
-      items.forEach(i => i.classList.remove('active', 'bg-primary', 'text-white'));
-      btn.classList.add('active', 'bg-primary', 'text-white');
+  function loadEvidence(btn) {
+    items.forEach(i => i.classList.remove("active", "bg-primary", "text-white"));
+    btn.classList.add("active", "bg-primary", "text-white");
 
-      document.getElementById('review-title').textContent = btn.dataset.title;
-      document.getElementById('review-author').textContent = btn.dataset.author;
-      document.getElementById('review-date').textContent = btn.dataset.date;
-      document.getElementById('review-code').textContent = btn.dataset.code;
-      
-      document.getElementById('hidden-review-code').value = btn.dataset.code;
-      document.getElementById('review-comment').value = ""; 
+    document.getElementById("review-badge").textContent = `${btn.dataset.tipoEtiqueta} · ${btn.dataset.estado}`;
+    document.getElementById("review-title").textContent = btn.dataset.title;
+    document.getElementById("review-action").textContent = btn.dataset.action;
+    document.getElementById("review-author").textContent = btn.dataset.author;
+    document.getElementById("review-date").textContent = btn.dataset.date;
+    document.getElementById("review-code").textContent = btn.dataset.code;
+    document.getElementById("review-subtipo").textContent = btn.dataset.subtipo;
+    document.getElementById("review-contacto").textContent = btn.dataset.contacto;
 
-      if (btn.dataset.image && btn.dataset.image !== "none") {
-        imgContainer.innerHTML = `<img src="${btn.dataset.image}" alt="Evidencia" class="img-fluid w-100 h-100" style="object-fit: contain;">`;
-      } else {
-        imgContainer.innerHTML = `
-          <span class="fs-1 mb-2">📸</span>
-          <span>Sin fotografía adjunta</span>
-          <small>Este registro no cuenta con una imagen válida.</small>`;
-      }
-    }
+    document.getElementById("hidden-review-type").value = btn.dataset.tipo;
+    document.getElementById("hidden-review-id").value = btn.dataset.id;
+    document.getElementById("hidden-review-code").value = btn.dataset.code;
+    document.getElementById("review-comment").value = btn.dataset.observacion || "";
 
-    items.forEach(item => {
-      item.addEventListener('click', function() { loadEvidence(this); });
-    });
-
-    if (items.length > 0) {
-      loadEvidence(items[0]);
-    }
-  });
-
-  function enviarRevision(estado) {
-    const codigo = document.getElementById('hidden-review-code').value;
-    if (!codigo) {
-      alert("Por favor, selecciona una evidencia primero.");
-      return;
-    }
-
-    const form = document.getElementById('form-verificacion');
-    const textarea = document.getElementById('review-comment');
-    
-    document.getElementById('hidden-review-state').value = estado;
-
-    if (estado === 'Rechazada' || estado === 'Corregir') {
-      textarea.required = true;
+    if (btn.dataset.motivos) {
+      warningBox.textContent = "Regla de negocio (0 puntos): " + btn.dataset.motivos;
+      warningBox.classList.remove("d-none");
     } else {
-      textarea.required = false;
+      warningBox.classList.add("d-none");
     }
 
-    if (form.reportValidity()) {
-      form.submit();
+    if (btn.dataset.archivo) {
+      if (btn.dataset.esImagen === "1") {
+        imgContainer.innerHTML = `<img src="${btn.dataset.archivo}" alt="Evidencia" class="img-fluid" style="max-height: 350px; object-fit: contain;">`;
+      } else {
+        imgContainer.innerHTML = `<a href="${btn.dataset.archivo}" target="_blank" class="btn btn-outline-primary">Abrir documento adjunto</a>`;
+      }
+    } else {
+      imgContainer.innerHTML = `<span class="fs-1 mb-2">📄</span><span>Sin archivo adjunto</span>`;
     }
   }
+
+  function aplicarFiltros() {
+    const q = (filtroInput.value || "").toLowerCase().trim();
+    let primeroVisible = null;
+    items.forEach(item => {
+      const okTab = (tabActual === "todas") || (item.dataset.grupo === tabActual);
+      const texto = `${item.dataset.code} ${item.dataset.title} ${item.dataset.author}`.toLowerCase();
+      const visible = okTab && (!q || texto.includes(q));
+      item.classList.toggle("d-none", !visible);
+      if (visible && !primeroVisible) primeroVisible = item;
+    });
+    if (primeroVisible && !document.querySelector(".review-item.active:not(.d-none)")) {
+      loadEvidence(primeroVisible);
+    }
+  }
+
+  items.forEach(item => item.addEventListener("click", () => loadEvidence(item)));
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", function () {
+      tabBtns.forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+      tabActual = this.dataset.tabFiltro;
+      aplicarFiltros();
+    });
+  });
+  if (filtroInput) filtroInput.addEventListener("input", aplicarFiltros);
+  if (items.length > 0) loadEvidence(items[0]);
+});
+
+function enviarRevision(estado) {
+  const id = document.getElementById("hidden-review-id").value;
+  if (!id) {
+    alert("Selecciona un registro primero.");
+    return;
+  }
+  const form = document.getElementById("form-verificacion");
+  const textarea = document.getElementById("review-comment");
+  document.getElementById("hidden-review-state").value = estado;
+  textarea.required = (estado === "Rechazada" || estado === "Solicitud de más antecedentes");
+  if (form.reportValidity()) form.submit();
+}
 </script>
 {% endblock %}
