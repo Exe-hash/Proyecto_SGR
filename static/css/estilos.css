@@ -1,4 +1,4 @@
-/* SGR: estilos de la interfaz de demostración. */
+
 :root {
     font-family: Arial, "Segoe UI", sans-serif;
     color: #111820;
@@ -1797,4 +1797,29 @@ textarea:focus-visible {
         margin: 0;
         align-self: center;
     }
+}
+
+.btn-logout-sidebar {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-logout-sidebar:hover {
+  background: #ffffff;
+  color: #9e0b0f;
+  border-color: #ffffff;
 }
