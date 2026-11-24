@@ -3,33 +3,69 @@
 
 {% block content %}
 <div class="container-fluid px-0">
-  <div class="mb-4">
-    <h1 class="mb-1">Registrar Actividad Diaria</h1>
-    <p class="text-muted">Completa los datos para generar tu evidencia y código verificador</p>
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+    <div>
+      <h1 class="mb-1">Registrar Actividad Diaria</h1>
+      <p class="text-muted mb-0">Completa los datos para generar tu evidencia y código verificador automático</p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="badge {% if actividades_hoy >= limite_diario %}bg-danger{% else %}bg-light text-dark border{% endif %} px-3 py-2 fs-6">
+        Hoy: {{ actividades_hoy }} / {{ limite_diario }} actividades
+      </span>
+    </div>
   </div>
+
+  {% if actividades_hoy >= limite_diario %}
+  <div class="alert alert-danger border-0 rounded-4 mb-4">
+    Has alcanzado el límite diario de <strong>{{ limite_diario }} actividades</strong> para hoy.
+  </div>
+  {% endif %}
 
   <form id="activity-form" method="post" enctype="multipart/form-data">
     {% csrf_token %}
-    
+
     <div class="card shadow-sm border-0 rounded-4 mb-4">
       <div class="card-body p-4">
         <div class="row g-3 mb-3">
           <div class="col-md-4">
             <label class="form-label fw-bold">Fecha de Registro *</label>
-            <input type="date" name="fecha" class="form-control" value="{% now 'Y-m-d' %}" required>
+            <input type="date" name="fecha" class="form-control"
+                   value="{% now 'Y-m-d' %}"
+                   min="{{ fecha_minima_semana|date:'Y-m-d' }}" required>
+            <small class="text-muted">Solo semana abierta (desde {{ fecha_minima_semana|date:"d/m/Y" }}).</small>
           </div>
-          <div class="col-md-8">
+
+          <div class="col-md-4">
             <label class="form-label fw-bold">Meta a la que aporta *</label>
-            <select name="meta_id" class="form-select" required>
-              <option value="">-- Seleccione una meta --</option>
-              {% for m in metas_reales %}
-                <option value="{{ m.id }}">{{ m.nombre }} (Vale un {{ m.ponderacion }}%)</option>
+            {% if asignaciones_meta %}
+              <select name="asignacion_meta_id" class="form-select" required>
+                <option value="">-- Seleccione meta asignada --</option>
+                {% for am in asignaciones_meta %}
+                  <option value="{{ am.id }}">{{ am.catalogo_meta.nombre }} ({{ am.ponderacion }}% · Meta: {{ am.cantidad_exigida }})</option>
+                {% endfor %}
+              </select>
+            {% else %}
+              <select name="meta_id" class="form-select" required>
+                <option value="">-- Seleccione una meta --</option>
+                {% for m in metas_reales %}
+                  <option value="{{ m.id }}">{{ m.nombre }} (Vale un {{ m.ponderacion }}%)</option>
+                {% endfor %}
+              </select>
+            {% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-bold">Subtipo de Atención</label>
+            <select name="subtipo_atencion_id" class="form-select">
+              <option value="">-- General (pondera normalmente) --</option>
+              {% for st in subtipos_atencion %}
+                <option value="{{ st.id }}">{{ st }}</option>
               {% endfor %}
             </select>
           </div>
         </div>
 
-        <div class="row g-3">
+        <div class="row g-3 mb-3">
           <div class="col-md-6">
             <label class="form-label fw-bold">Actividad / Solicitud / Problema *</label>
             <textarea name="actividad" class="form-control" rows="3" required></textarea>
@@ -39,20 +75,48 @@
             <textarea name="accion" class="form-control" rows="3" required></textarea>
           </div>
         </div>
+
+        <div class="row g-3 align-items-center">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Hito asociado (Opcional)</label>
+            <select name="hito_id" class="form-select">
+              <option value="">-- Sin hito vinculado --</option>
+              {% for h in hitos_activos %}
+                <option value="{{ h.id }}">{{ h.nombre }} ({{ h.territorio.nombre }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 pt-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="check-delegado" name="es_usuario_delegado">
+              <label class="form-check-label small fw-semibold text-danger" for="check-delegado">
+                El solicitante es el propio Delegado (se registra, pero no contabiliza puntaje)
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="card shadow-sm border-0 rounded-4 mb-4">
       <div class="card-body p-4">
-        <h6 class="fw-bold mb-3">Datos de Contacto (Opcional)</h6>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold mb-0">Datos del Vecino / Contacto</h6>
+          <small class="text-muted">Nombre y teléfono son necesarios para obtener puntuación</small>
+        </div>
         <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label">Nombre de contacto</label>
-            <input type="text" name="contacto" class="form-control" maxlength="120">
+          <div class="col-md-4">
+            <label class="form-label">RUT del vecino (autocompleta)</label>
+            <input type="text" id="actividad-rut" name="rut_vecino" class="form-control input-rut" maxlength="15" placeholder="Ej: 12.345.678-9">
+            <small id="actividad-rut-msg" class="text-muted"></small>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
+            <label class="form-label">Nombre de contacto</label>
+            <input type="text" id="actividad-contacto" name="contacto" class="form-control" maxlength="120">
+          </div>
+          <div class="col-md-4">
             <label class="form-label">Teléfono (fono)</label>
-            <input type="tel" name="telefono" class="form-control" maxlength="25">
+            <input type="tel" id="actividad-telefono" name="telefono" class="form-control" maxlength="25">
           </div>
         </div>
       </div>
@@ -64,34 +128,54 @@
           <input class="form-check-input" type="checkbox" id="commitment-toggle" name="crear_compromiso" checked>
           <label class="form-check-label fw-bold" for="commitment-toggle">Ingresar como compromiso a la agenda colectiva (Tubo de Trabajo)</label>
         </div>
-        
-        <div class="row g-3 mb-3">
-          <div class="col-md-6">
-            <label class="form-label fw-bold">Territorio</label>
-            <select name="territorio" class="form-select">
-              {% for del in delegaciones %}
-                <option value="{{ del.id }}">{{ del.nombre }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-bold">Área de apoyo</label>
-            <select name="area" class="form-select">
-              <option>Alumbrado público</option>
-              <option>Aseo y ornato</option>
-              <option>Tránsito</option>
-            </select>
-          </div>
-        </div>
 
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label fw-bold">Funcionario Responsable</label>
-            <input type="text" name="responsable" class="form-control" placeholder="Buscar funcionario…">
+        <div id="bloque-compromiso">
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Delegación</label>
+              <select name="territorio" class="form-select">
+                {% for del in delegaciones %}
+                  <option value="{{ del.id }}" {% if del.id == delegacion_actual_id %}selected{% endif %}>{{ del.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Territorio / Sector</label>
+              <select name="sector_id" class="form-select">
+                <option value="">-- Opcional --</option>
+                {% for t in territorios %}
+                  <option value="{{ t.id }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Área de apoyo</label>
+              <select name="area" class="form-select">
+                <option>Alumbrado público</option>
+                <option>Aseo y ornato</option>
+                <option>Tránsito</option>
+                <option>Gestión territorial</option>
+                <option>Área Social</option>
+              </select>
+            </div>
           </div>
-          <div class="col-md-6">
-            <label class="form-label fw-bold">Fecha Comprometida</label>
-            <input type="date" name="fecha_comprometida" class="form-control" value="{% now 'Y-m-d' %}">
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Funcionario Responsable</label>
+              <select name="responsable_id" class="form-select">
+                <option value="{{ request.user.id }}">Yo mismo ({{ nombre_usuario }})</option>
+                {% for f in funcionarios_disponibles %}
+                  {% if f.id != request.user.id %}
+                    <option value="{{ f.id }}">{{ f.get_full_name|default:f.username }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Fecha Comprometida</label>
+              <input type="date" name="fecha_comprometida" class="form-control" value="{% now 'Y-m-d' %}">
+            </div>
           </div>
         </div>
       </div>
@@ -100,18 +184,58 @@
     <div class="card shadow-sm border-0 rounded-4 mb-4">
       <div class="card-body p-4 text-center">
         <label class="form-label fw-bold d-block text-start">Fotografía de Evidencia *</label>
-        <div class="p-5 border border-2 border-primary border-opacity-50 border-dashed rounded-3 bg-light" style="border-style: dashed !important;">
+        <div class="p-4 border border-2 border-primary border-opacity-50 rounded-3 bg-light" style="border-style: dashed !important;">
           <input id="evidence-file" type="file" name="fotografia" class="form-control" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
           <small class="text-muted mt-2 d-block">Formatos permitidos: JPG, PNG · Tamaño máx.: 5 MB</small>
         </div>
-        <p class="text-muted small mt-3 text-start">ⓘ El código verificador único se generará automáticamente al guardar.</p>
+        <p class="text-muted small mt-3 text-start mb-0">ⓘ El código verificador único se generará automáticamente al guardar.</p>
       </div>
     </div>
 
     <div class="d-flex justify-content-end gap-2 mt-4">
       <button type="reset" class="btn btn-light px-4">Cancelar</button>
-      <button type="button" class="btn btn-danger px-4" style="background-color: #ad0007;" onclick="document.getElementById('activity-form').submit();">✓ Guardar Registro</button>
+      <button type="submit" class="btn btn-danger px-4" style="background-color: #ad0007;" {% if actividades_hoy >= limite_diario %}disabled{% endif %}>
+        ✓ Guardar Registro
+      </button>
     </div>
   </form>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const toggle = document.getElementById("commitment-toggle");
+  const bloque = document.getElementById("bloque-compromiso");
+  if (toggle && bloque) {
+    const sync = () => { bloque.style.display = toggle.checked ? "block" : "none"; };
+    toggle.addEventListener("change", sync);
+    sync();
+  }
+
+  const rutInput = document.getElementById("actividad-rut");
+  const nombreInput = document.getElementById("actividad-contacto");
+  const telInput = document.getElementById("actividad-telefono");
+  const rutMsg = document.getElementById("actividad-rut-msg");
+
+  if (rutInput) {
+    rutInput.addEventListener("blur", function () {
+      const rut = rutInput.value.trim();
+      if (!rut) { rutMsg.textContent = ""; return; }
+      fetch("{% url 'principal:api_buscar_vecino' %}?rut=" + encodeURIComponent(rut))
+        .then(r => r.json())
+        .then(data => {
+          if (data.encontrado) {
+            if (data.nombre) nombreInput.value = data.nombre;
+            if (data.telefono) telInput.value = data.telefono;
+            rutMsg.textContent = "Vecino encontrado: datos autocompletados.";
+            rutMsg.className = "text-success small";
+          } else {
+            rutMsg.textContent = "Vecino nuevo: se guardará al registrar.";
+            rutMsg.className = "text-muted small";
+          }
+        })
+        .catch(() => {});
+    });
+  }
+});
+</script>
 {% endblock %}

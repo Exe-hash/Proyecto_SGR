@@ -3,18 +3,17 @@
 
 {% block content %}
 <div class="container-fluid px-0">
-  <!-- Encabezado -->
-  <div class="row mb-4 align-items-end">
-    <div class="col-md-8">
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+    <div>
       <h1 class="mb-1">Historial de Atenciones</h1>
-      <p class="text-muted mb-0">Gestión de casos sociales, historial de hasta 3 atenciones por RUT y derivaciones</p>
+      <p class="text-muted mb-0">Gestión de casos sociales, historial de hasta 3 atenciones por RUT y derivaciones al Tubo</p>
     </div>
+    <span class="badge {% if actividades_hoy >= limite_diario %}bg-danger{% else %}bg-light text-dark border{% endif %} px-3 py-2 fs-6">
+      Hoy: {{ actividades_hoy }} / {{ limite_diario }} actividades
+    </span>
   </div>
 
-  <!-- Contenedor Principal -->
   <div class="card shadow-sm border-0 rounded-4 mb-4">
-
-    <!-- Barra de Herramientas: Filtros reales y Botón Nuevo Caso -->
     <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom gap-3">
       <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
         <label class="text-muted fw-bold small mb-0">Filtros:</label>
@@ -27,7 +26,7 @@
           <option value="Exención Aseo" {% if filtro_tipo == 'Exención Aseo' %}selected{% endif %}>Exención Aseo</option>
         </select>
 
-        <input type="search" name="q" value="{{ busqueda }}" class="form-control form-control-sm bg-light border-0" style="width: 210px;" placeholder="Buscar por RUT o nombre...">
+        <input type="search" name="q" value="{{ busqueda }}" class="form-control form-control-sm bg-light border-0" style="width: 220px;" placeholder="Buscar código, RUT o nombre..." data-filtro-tabla="tabla-area-social">
 
         <button type="submit" class="btn btn-sm btn-outline-secondary fw-bold">Filtrar</button>
         {% if filtro_fecha or filtro_tipo or busqueda %}
@@ -35,17 +34,17 @@
         {% endif %}
       </form>
 
-      <button class="btn btn-danger fw-bold shadow-sm" style="background-color: #ad0007; border-color: #ad0007;" data-bs-toggle="modal" data-bs-target="#modalNuevoExpediente">
+      <button class="btn btn-danger fw-bold shadow-sm" style="background-color: #ad0007; border-color: #ad0007;" data-bs-toggle="modal" data-bs-target="#modalNuevoExpediente" {% if actividades_hoy >= limite_diario %}disabled{% endif %}>
         ✚ Nuevo Caso Social
       </button>
     </div>
 
-    <!-- Tabla de Datos -->
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table id="tabla-area-social" class="table table-hover align-middle mb-0">
         <thead class="table-light text-secondary">
           <tr>
-            <th scope="col" class="ps-4">Fecha ingreso</th>
+            <th scope="col" class="ps-4">Código</th>
+            <th scope="col">Fecha ingreso</th>
             <th scope="col">RUT</th>
             <th scope="col">Usuario</th>
             <th scope="col">Última atención</th>
@@ -56,7 +55,8 @@
         <tbody>
           {% for caso in casos %}
           <tr>
-            <td class="ps-4">{{ caso.fecha_ingreso|date:"d/m/Y" }}</td>
+            <td class="ps-4 fw-bold text-muted">{{ caso.codigo }}</td>
+            <td>{{ caso.fecha_ingreso|date:"d/m/Y" }}</td>
             <td class="fw-bold">{{ caso.rut }}</td>
             <td>{{ caso.usuario_nombre }}</td>
             <td>{{ caso.tipo_atencion }}</td>
@@ -73,7 +73,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6" class="text-center p-5 text-muted">No hay casos sociales registrados con los filtros actuales.</td>
+            <td colspan="7" class="text-center p-5 text-muted">No hay casos sociales registrados con los filtros actuales.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -82,25 +82,20 @@
   </div>
 </div>
 
-<!-- ======================================================= -->
-<!-- MODALES DE EXPEDIENTE (Fuera de <table> para HTML sano) -->
-<!-- ======================================================= -->
+<!-- MODALES DE EXPEDIENTE -->
 {% for caso in casos %}
 <div class="modal fade" id="modalExpediente{{ caso.id }}" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow rounded-4">
-
       <div class="modal-header border-bottom pb-3">
         <div>
-          <h5 class="modal-title fw-bold text-dark mb-0">Expediente Social — {{ caso.usuario_nombre }}</h5>
+          <h5 class="modal-title fw-bold text-dark mb-0">Expediente {{ caso.codigo }} — {{ caso.usuario_nombre }}</h5>
           <small class="text-muted">RUT: {{ caso.rut }} · {{ caso.gestiones_realizadas }} de {{ caso.gestiones_maximas }} atenciones registradas</small>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
       <div class="modal-body pt-3">
-
-        <!-- 1. Datos del ciudadano -->
         <h6 class="fw-bold text-secondary mb-3 pb-2 border-bottom">Datos del ciudadano</h6>
         <form method="post" action="{% url 'principal:editar_caso_social' %}" class="row g-3 mb-4 align-items-end">
           {% csrf_token %}
@@ -126,10 +121,9 @@
           </div>
         </form>
 
-        <!-- 2. Historial Desplegable de Gestiones (Gestión 1, 2 y 3 por separado) -->
         <div class="d-flex justify-content-between align-items-end border-bottom pb-2 mb-3">
           <h6 class="fw-bold text-secondary mb-0">Historial de Gestiones Realizadas</h6>
-          <small class="text-muted">Despliega cada atención para ver o corregir sus datos</small>
+          <small class="text-muted">Las gestiones aprobadas quedan bloqueadas permanentemente</small>
         </div>
 
         <div class="accordion mb-4" id="accordionGestiones{{ caso.id }}">
@@ -144,7 +138,7 @@
                   </div>
                   <div class="d-flex align-items-center gap-2">
                     <span class="text-muted small">{{ g.fecha_registro|date:"d/m/Y H:i" }}</span>
-                    <span class="badge {% if g.validacion == 'Aprobado' or g.validacion == 'Aprobada' %}bg-success{% elif g.validacion == 'Rechazado' or g.validacion == 'Rechazada' %}bg-danger{% elif g.validacion == 'Solicitud de más antecedentes' %}bg-info text-dark{% else %}bg-warning text-dark{% endif %}">
+                    <span class="badge {% if g.esta_aprobada %}bg-success{% elif g.validacion == 'Rechazado' or g.validacion == 'Rechazada' %}bg-danger{% elif g.validacion == 'Solicitud de más antecedentes' %}bg-info text-dark{% else %}bg-warning text-dark{% endif %}">
                       {{ g.validacion }}
                     </span>
                   </div>
@@ -154,20 +148,30 @@
 
             <div id="collapseG{{ g.id }}" class="accordion-collapse collapse {% if forloop.last %}show{% endif %}" data-bs-parent="#accordionGestiones{{ caso.id }}">
               <div class="accordion-body bg-white">
-                {% if g.esta_aprobada and not es_supervisor %}
+                {% if g.esta_aprobada %}
                 <div class="alert alert-success py-2 small mb-3">
-                  Esta gestión ya fue <strong>aprobada</strong> y se encuentra bloqueada contra modificaciones.
+                  Esta gestión está <strong>Aprobada</strong> y no permite modificaciones (regla de inmutabilidad).
+                </div>
+                {% endif %}
+                {% if g.motivos_sin_puntaje %}
+                <div class="alert alert-warning py-2 small mb-3">
+                  <strong>Aviso de puntaje (0 pts):</strong> {{ g.motivos_sin_puntaje|join:" · " }}
+                </div>
+                {% endif %}
+                {% if g.observacion_revision %}
+                <div class="alert alert-info py-2 small mb-3">
+                  <strong>Observación de jefatura:</strong> {{ g.observacion_revision }}
                 </div>
                 {% endif %}
 
-                <form method="post" action="{% url 'principal:editar_caso_social' %}">
+                <form method="post" action="{% url 'principal:editar_caso_social' %}" enctype="multipart/form-data">
                   {% csrf_token %}
                   <input type="hidden" name="caso_id" value="{{ caso.id }}">
                   <input type="hidden" name="gestion_id" value="{{ g.id }}">
                   <input type="hidden" name="modo" value="actualizar_gestion">
 
                   <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                       <label class="form-label fw-bold small mb-1">Sub Atención</label>
                       <select name="sub_atencion" class="form-select form-select-sm" {% if not g.puede_editar %}disabled{% endif %}>
                         <option value="Orientación Social" {% if g.sub_atencion == 'Orientación Social' or g.sub_atencion == 'Orientacion Social' %}selected{% endif %}>Orientación Social</option>
@@ -175,7 +179,16 @@
                         <option value="Exención Aseo" {% if g.sub_atencion == 'Exención Aseo' or g.sub_atencion == 'Exencion Aseo' %}selected{% endif %}>Exención Aseo</option>
                       </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
+                      <label class="form-label fw-bold small mb-1">Subtipo Catálogo</label>
+                      <select name="subtipo_atencion_id" class="form-select form-select-sm" {% if not g.puede_editar %}disabled{% endif %}>
+                        <option value="">-- Estándar --</option>
+                        {% for st in subtipos_sociales %}
+                          <option value="{{ st.id }}" {% if g.subtipo_atencion_id == st.id %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-md-4">
                       <label class="form-label fw-bold small mb-1">Acción Realizada</label>
                       <select name="accion_realizada" class="form-select form-select-sm" {% if not g.puede_editar %}disabled{% endif %}>
                         <option value="Emergencia" {% if g.accion_realizada == 'Emergencia' %}selected{% endif %}>Emergencia</option>
@@ -193,11 +206,11 @@
                     </div>
                     <div class="col-md-4">
                       <label class="form-label fw-bold small mb-1">Validación</label>
-                      {% if es_supervisor %}
+                      {% if es_supervisor and g.puede_editar %}
                       <select name="validacion" class="form-select form-select-sm fw-bold">
                         <option value="Pendiente" {% if g.validacion == 'Pendiente' %}selected{% endif %}>Pendiente</option>
-                        <option value="Aprobado" {% if g.validacion == 'Aprobado' or g.validacion == 'Aprobada' %}selected{% endif %}>Aprobado</option>
-                        <option value="Rechazado" {% if g.validacion == 'Rechazado' or g.validacion == 'Rechazada' %}selected{% endif %}>Rechazado</option>
+                        <option value="Aprobada" {% if g.esta_aprobada %}selected{% endif %}>Aprobada</option>
+                        <option value="Rechazada" {% if g.validacion == 'Rechazado' or g.validacion == 'Rechazada' %}selected{% endif %}>Rechazada</option>
                         <option value="Solicitud de más antecedentes" {% if g.validacion == 'Solicitud de más antecedentes' %}selected{% endif %}>Solicitud de más antecedentes</option>
                       </select>
                       {% else %}
@@ -207,6 +220,17 @@
                     <div class="col-12">
                       <label class="form-label fw-bold small mb-1">Detalle de la acción</label>
                       <textarea name="detalle_accion" class="form-control form-control-sm" rows="2" {% if not g.puede_editar %}disabled{% endif %}>{{ g.detalle_accion }}</textarea>
+                    </div>
+                    <div class="col-md-8">
+                      <label class="form-label fw-bold small mb-1">Respaldo fotográfico o PDF (máx. 5 MB)</label>
+                      <input type="file" name="imagen_verificacion" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.pdf" {% if not g.puede_editar %}disabled{% endif %}>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                      {% if g.tiene_archivo %}
+                      <a href="{% url 'principal:descargar_evidencia_social' g.id %}" target="_blank" class="btn btn-sm btn-outline-secondary w-100">Ver respaldo adjunto</a>
+                      {% else %}
+                      <span class="text-muted small">Sin archivo adjunto</span>
+                      {% endif %}
                     </div>
                     <div class="col-12 d-flex flex-wrap gap-4">
                       <div class="form-check">
@@ -232,13 +256,12 @@
           {% endfor %}
         </div>
 
-        <!-- 3. Bloque separado para agregar la 2ª o 3ª Gestión -->
         {% if caso.puede_agregar_gestion %}
         <div class="border border-danger border-opacity-25 rounded-3 p-3 bg-light">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h6 class="fw-bold text-danger mb-0">Registrar nueva atención (Gestión {{ caso.siguiente_numero }} de 3)</h6>
-              <small class="text-muted">Esto creará una nueva fila en el historial sin modificar las gestiones anteriores.</small>
+              <small class="text-muted">Creará una nueva fila en el historial respetando semana abierta y límite diario.</small>
             </div>
             <button class="btn btn-sm btn-danger fw-bold" style="background-color: #ad0007; border-color: #ad0007;" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNuevaGestion{{ caso.id }}">
               ✚ Agregar Gestión {{ caso.siguiente_numero }}
@@ -246,13 +269,17 @@
           </div>
 
           <div class="collapse mt-3" id="collapseNuevaGestion{{ caso.id }}">
-            <form method="post" action="{% url 'principal:editar_caso_social' %}" class="bg-white border rounded-3 p-3">
+            <form method="post" action="{% url 'principal:editar_caso_social' %}" enctype="multipart/form-data" class="bg-white border rounded-3 p-3">
               {% csrf_token %}
               <input type="hidden" name="caso_id" value="{{ caso.id }}">
               <input type="hidden" name="modo" value="agregar_gestion">
 
               <div class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
+                  <label class="form-label fw-bold small mb-1">Fecha ejecución *</label>
+                  <input type="date" name="fecha_ejecucion" class="form-control form-control-sm" value="{% now 'Y-m-d' %}" min="{{ fecha_minima_semana|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-4">
                   <label class="form-label fw-bold small mb-1">Sub Atención</label>
                   <select name="sub_atencion" class="form-select form-select-sm" required>
                     <option value="Orientación Social">Orientación Social</option>
@@ -260,7 +287,16 @@
                     <option value="Exención Aseo">Exención Aseo</option>
                   </select>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
+                  <label class="form-label fw-bold small mb-1">Subtipo Catálogo</label>
+                  <select name="subtipo_atencion_id" class="form-select form-select-sm">
+                    <option value="">-- Estándar --</option>
+                    {% for st in subtipos_sociales %}
+                      <option value="{{ st.id }}">{{ st }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-4">
                   <label class="form-label fw-bold small mb-1">Acción Realizada</label>
                   <select name="accion_realizada" class="form-select form-select-sm" required>
                     <option value="Emergencia">Emergencia</option>
@@ -268,17 +304,17 @@
                     <option value="Orientación / Derivación">Orientación / Derivación</option>
                   </select>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                   <label class="form-label fw-bold small mb-1">Fecha programada</label>
                   <input type="date" name="fecha_programada" class="form-control form-control-sm">
                 </div>
-                <div class="col-md-6">
-                  <label class="form-label fw-bold small mb-1">Evidencia (CÓDIGO)</label>
-                  <input type="text" name="evidencia" class="form-control form-control-sm" placeholder="Ej: SOC-002">
+                <div class="col-md-4">
+                  <label class="form-label fw-bold small mb-1">Respaldo (JPG/PNG/PDF)</label>
+                  <input type="file" name="imagen_verificacion" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.pdf">
                 </div>
                 <div class="col-12">
                   <label class="form-label fw-bold small mb-1">Detalle de la nueva acción</label>
-                  <textarea name="detalle_accion" class="form-control form-control-sm" rows="2" placeholder="Describe esta nueva atención..." required></textarea>
+                  <textarea name="detalle_accion" class="form-control form-control-sm" rows="2" required></textarea>
                 </div>
                 <div class="col-12 d-flex flex-wrap gap-4">
                   <div class="form-check">
@@ -305,7 +341,6 @@
           Este ciudadano ya completó el límite máximo de <strong>3 de 3 gestiones</strong> sociales permitidas.
         </div>
         {% endif %}
-
       </div>
 
       <div class="modal-footer border-top-0 pt-0">
@@ -316,38 +351,35 @@
 </div>
 {% endfor %}
 
-<!-- ========================================== -->
-<!-- MODAL: NUEVO CASO SOCIAL                   -->
-<!-- ========================================== -->
+<!-- MODAL: NUEVO CASO SOCIAL -->
 <div class="modal fade" id="modalNuevoExpediente" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow rounded-4">
-
       <div class="modal-header border-bottom-0 pb-0">
         <h5 class="modal-title fw-bold text-dark">Nuevo Expediente Social</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
-      <form method="post" action="{% url 'principal:crear_caso_social' %}">
+      <form method="post" action="{% url 'principal:crear_caso_social' %}" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="modal-body pt-3">
-
           <h6 class="fw-bold text-secondary mb-3 pb-2 border-bottom">Datos del ciudadano</h6>
           <div class="row g-3 mb-4">
             <div class="col-md-4">
-              <label class="form-label text-muted small mb-1">RUT</label>
-              <input type="text" name="rut" class="form-control" placeholder="Ej: 12.345.678-9" required>
+              <label class="form-label text-muted small mb-1">RUT *</label>
+              <input type="text" id="social-rut" name="rut" class="form-control input-rut" placeholder="Ej: 12.345.678-9" required>
+              <small id="social-rut-msg" class="text-muted"></small>
             </div>
             <div class="col-md-8">
-              <label class="form-label text-muted small mb-1">Nombre Completo</label>
-              <input type="text" name="usuario_nombre" class="form-control" placeholder="Nombre del ciudadano" required>
+              <label class="form-label text-muted small mb-1">Nombre Completo *</label>
+              <input type="text" id="social-nombre" name="usuario_nombre" class="form-control" placeholder="Nombre del ciudadano" required>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label text-muted small mb-1">Teléfono</label>
-              <input type="text" name="telefono" class="form-control" placeholder="Ej: 912345678">
+              <input type="text" id="social-telefono" name="telefono" class="form-control" placeholder="Ej: 912345678">
             </div>
-            <div class="col-md-6">
-              <label class="form-label text-muted small mb-1">Sub Atención</label>
+            <div class="col-md-4">
+              <label class="form-label text-muted small mb-1">Sub Atención *</label>
               <select name="sub_atencion" class="form-select" required>
                 <option value="" selected disabled>Seleccione...</option>
                 <option value="Orientación Social">Orientación Social</option>
@@ -355,18 +387,31 @@
                 <option value="Exención Aseo">Exención Aseo</option>
               </select>
             </div>
+            <div class="col-md-4">
+              <label class="form-label text-muted small mb-1">Subtipo Catálogo</label>
+              <select name="subtipo_atencion_id" class="form-select">
+                <option value="">-- Estándar --</option>
+                {% for st in subtipos_sociales %}
+                  <option value="{{ st.id }}">{{ st }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
 
           <div class="d-flex justify-content-between align-items-end border-bottom pb-2 mb-3">
-            <h6 class="fw-bold text-secondary mb-0">Flujo de Gestiones</h6>
-            <small class="text-muted">Primera Gestión (1 de 3)</small>
+            <h6 class="fw-bold text-secondary mb-0">Primera Gestión (1 de 3)</h6>
+            <small class="text-muted">Solo semana abierta (desde {{ fecha_minima_semana|date:"d/m/Y" }})</small>
           </div>
 
           <div class="bg-light bg-opacity-50 border rounded-3 p-3 mb-4">
             <div class="row g-3">
-              <div class="col-md-8">
-                <label class="form-label fw-bold small mb-1">Acción Realizada</label>
-                <select name="accion_realizada" class="form-select shadow-none" required>
+              <div class="col-md-4">
+                <label class="form-label fw-bold small mb-1">Fecha ejecución *</label>
+                <input type="date" name="fecha_ejecucion" class="form-control" value="{% now 'Y-m-d' %}" min="{{ fecha_minima_semana|date:'Y-m-d' }}" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-bold small mb-1">Acción Realizada *</label>
+                <select name="accion_realizada" class="form-select" required>
                   <option value="" selected disabled>Seleccione...</option>
                   <option value="Emergencia">Emergencia</option>
                   <option value="Visita a Terreno">Visita a Terreno</option>
@@ -375,23 +420,23 @@
               </div>
               <div class="col-md-4">
                 <label class="form-label fw-bold small mb-1">Fecha programada</label>
-                <input type="date" name="fecha_programada" class="form-control shadow-none">
+                <input type="date" name="fecha_programada" class="form-control">
               </div>
               <div class="col-12">
-                <label class="form-label fw-bold small mb-1">Detalle de la acción</label>
-                <textarea name="detalle_accion" class="form-control shadow-none" rows="2" placeholder="Ingrese los detalles de la solicitud..." required></textarea>
+                <label class="form-label fw-bold small mb-1">Detalle de la acción *</label>
+                <textarea name="detalle_accion" class="form-control" rows="2" required></textarea>
               </div>
               <div class="col-md-6">
-                <label class="form-label fw-bold small mb-1">Evidencia (CÓDIGO)</label>
-                <input type="text" name="evidencia" class="form-control shadow-none" placeholder="Ej: SOC763">
+                <label class="form-label fw-bold small mb-1">Respaldo fotográfico o PDF (opcional)</label>
+                <input type="file" name="imagen_verificacion" class="form-control" accept=".jpg,.jpeg,.png,.pdf">
               </div>
               <div class="col-md-6">
                 <label class="form-label fw-bold small mb-1">Validación</label>
                 {% if es_supervisor %}
-                <select name="validacion" class="form-select shadow-none fw-bold">
+                <select name="validacion" class="form-select fw-bold">
                   <option value="Pendiente" selected>Pendiente</option>
-                  <option value="Aprobado">Aprobado</option>
-                  <option value="Rechazado">Rechazado</option>
+                  <option value="Aprobada">Aprobada</option>
+                  <option value="Rechazada">Rechazada</option>
                   <option value="Solicitud de más antecedentes">Solicitud de más antecedentes</option>
                 </select>
                 {% else %}
@@ -410,7 +455,6 @@
             <input class="form-check-input" type="checkbox" name="derivar_agenda" value="True" id="checkAgendaNuevo">
             <label class="form-check-label text-dark" for="checkAgendaNuevo">Ingresar como compromiso a la Agenda Colectiva (Tubo)</label>
           </div>
-
         </div>
 
         <div class="modal-footer border-top-0 pt-0">
@@ -418,8 +462,37 @@
           <button type="submit" class="btn btn-danger fw-bold" style="background-color: #ad0007; border-color: #ad0007;">Guardar Nuevo Caso</button>
         </div>
       </form>
-
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const rutInput = document.getElementById("social-rut");
+  const nombreInput = document.getElementById("social-nombre");
+  const telInput = document.getElementById("social-telefono");
+  const rutMsg = document.getElementById("social-rut-msg");
+
+  if (rutInput) {
+    rutInput.addEventListener("blur", function () {
+      const rut = rutInput.value.trim();
+      if (!rut) { rutMsg.textContent = ""; return; }
+      fetch("{% url 'principal:api_buscar_vecino' %}?rut=" + encodeURIComponent(rut))
+        .then(r => r.json())
+        .then(data => {
+          if (data.encontrado) {
+            if (data.nombre) nombreInput.value = data.nombre;
+            if (data.telefono) telInput.value = data.telefono;
+            rutMsg.textContent = "Ciudadano encontrado: campos autocompletados.";
+            rutMsg.className = "text-success small";
+          } else {
+            rutMsg.textContent = "Nuevo ciudadano.";
+            rutMsg.className = "text-muted small";
+          }
+        })
+        .catch(() => {});
+    });
+  }
+});
+</script>
 {% endblock %}

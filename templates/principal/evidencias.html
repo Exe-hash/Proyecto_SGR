@@ -2,15 +2,18 @@
 {% block title %}Mis evidencias | SGR{% endblock %}
 
 {% block content %}
+{% include "principal/partials/buscador_funcionario.html" %}
 <div class="container-fluid px-0">
   <div class="row align-items-center mb-4">
-    <div class="col-md-8">
+    <div class="col-md-7">
       <h1 class="mb-1">Historial de Mis Evidencias</h1>
-      <p class="text-muted mb-0">Consulta el estado, observaciones y el historial de todas las evidencias enviadas</p>
+      <p class="text-muted mb-0">Consulta estado, observaciones, puntaje y corrige registros mientras no estén aprobados</p>
     </div>
-    <div class="col-md-4 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end gap-2">
-      <input type="search" class="form-control w-auto" placeholder="Buscar por código..." data-filter-input="evidencias">
+    <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end gap-2">
+      <input type="search" class="form-control w-auto" placeholder="Buscar código o actividad..." data-filtro-tabla="tabla-evidencias">
+      {% if puede_registrar_actividades %}
       <a href="{% url 'principal:actividades' %}" class="btn btn-danger text-nowrap" style="background-color: #ad0007;">＋ Nueva Evidencia</a>
+      {% endif %}
     </div>
   </div>
 
@@ -29,7 +32,7 @@
     </div>
     <div class="col-md-4">
       <div class="card shadow-sm border-0 rounded-4 p-4 text-center h-100">
-        <h6 class="text-danger fw-bold">Pendientes / Rechazadas</h6>
+        <h6 class="text-danger fw-bold">Pendientes / Observadas</h6>
         <h2 class="display-5 fw-bold mb-0 text-danger">{{ pendientes }}</h2>
       </div>
     </div>
@@ -37,46 +40,70 @@
 
   <div class="card shadow-sm border-0 rounded-4 mb-4">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table id="tabla-evidencias" class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
             <th class="ps-4">Fecha</th>
             <th>Código</th>
             <th>Actividad</th>
             <th>Estado</th>
+            <th>Puntaje</th>
             <th class="text-end pe-4">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          {% for e in evidencias_reales %}
-          <tr data-filter-item="evidencias">
+          {% for item in evidencias_reales %}
+          {% with e=item.obj %}
+          <tr>
             <td class="ps-4">{{ e.fecha_registro|date:"d/m/Y" }}</td>
             <td class="fw-bold">{{ e.codigo }}</td>
             <td>{{ e.solicitud|truncatechars:45 }}</td>
             <td>
-              {% if e.estado == 'Aprobada' %}
+              {% if item.aprobada %}
                 <span class="badge bg-success">Aprobada</span>
               {% elif e.estado == 'Rechazada' %}
                 <span class="badge bg-danger">Rechazada</span>
+              {% elif e.estado == 'Solicitud de más antecedentes' %}
+                <span class="badge bg-info text-dark">Más antecedentes</span>
               {% else %}
-                <span class="badge bg-warning text-dark">En Revisión</span>
+                <span class="badge bg-warning text-dark">{{ e.estado }}</span>
               {% endif %}
             </td>
-            <td class="text-end pe-4">
-              <button type="button" class="btn btn-sm btn-outline-primary" data-evidence-detail 
-                data-code="{{ e.codigo }}" 
-                data-title="{{ e.solicitud }}" 
-                data-status="{% if e.estado == 'En revisión' %}Sin revisión{% else %}{{ e.estado }}{% endif %}" 
-                data-observation="{% if e.observacion %}{{ e.observacion }}{% else %}Esperando revisión de jefatura{% endif %}"
+            <td>
+              {% if item.puntaje %}
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">1 pt</span>
+              {% elif item.motivos_sin_puntaje %}
+                <span class="badge bg-secondary" title="{{ item.motivos_sin_puntaje|join:' · ' }}">0 pts</span>
+              {% else %}
+                <span class="text-muted small">Pendiente</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-4 text-nowrap">
+              <button type="button" class="btn btn-sm btn-outline-primary" data-evidence-detail
+                data-code="{{ e.codigo }}"
+                data-title="{{ e.solicitud }}"
+                data-action="{{ e.accion }}"
+                data-status="{{ e.estado }}"
+                data-observation="{{ item.observacion_final|default:'Esperando revisión de jefatura' }}"
                 data-reviewer="{% if e.revisor %}{{ e.revisor.get_full_name|default:e.revisor.username }}{% else %}Aún no evaluado{% endif %}"
-                data-reviewdate="{% if e.fecha_revision %}{{ e.fecha_revision|date:'d/m/Y - H:i' }}{% else %}Pendiente{% endif %}">
+                data-reviewdate="{% if e.fecha_revision %}{{ e.fecha_revision|date:'d/m/Y - H:i' }}{% else %}Pendiente{% endif %}"
+                data-motivos="{{ item.motivos_sin_puntaje|join:' · ' }}"
+                data-image="{% if e.fotografia %}{% url 'principal:descargar_evidencia' e.id %}{% endif %}">
                 Ver Detalle
               </button>
+              {% if item.puede_editar %}
+              <button type="button" class="btn btn-sm btn-outline-danger ms-1" data-bs-toggle="modal" data-bs-target="#editEvModal{{ e.id }}">
+                Corregir
+              </button>
+              {% elif item.aprobada %}
+              <span class="badge bg-light text-muted border ms-1">Bloqueada</span>
+              {% endif %}
             </td>
           </tr>
+          {% endwith %}
           {% empty %}
           <tr>
-            <td colspan="5" class="text-center p-5 text-muted">Aún no has registrado ninguna evidencia en el sistema.</td>
+            <td colspan="6" class="text-center p-5 text-muted">Aún no hay evidencias registradas en este período.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -85,9 +112,10 @@
   </div>
 </div>
 
+<!-- Modal Detalle -->
 <div class="modal fade" id="evidenceModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow rounded-4">
       <div class="modal-header">
         <h5 class="modal-title fw-bold">Detalle de evidencia</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -95,8 +123,14 @@
       <div class="modal-body">
         <p class="mb-1"><strong>Código:</strong> <span id="evidence-code"></span></p>
         <p class="mb-1"><strong>Actividad:</strong> <span id="evidence-title"></span></p>
+        <p class="mb-1"><strong>Acción realizada:</strong> <span id="evidence-action"></span></p>
         <p class="mb-3"><strong>Estado:</strong> <span id="evidence-status" class="fw-bold"></span></p>
-        
+
+        <div id="evidence-motivos" class="alert alert-warning py-2 small d-none mb-3"></div>
+        <div id="evidence-photo-box" class="text-center mb-3 d-none">
+          <img id="evidence-photo" src="" alt="Evidencia" class="img-fluid rounded border" style="max-height: 280px;">
+        </div>
+
         <div class="bg-light p-3 rounded-3 border">
           <p class="mb-0"><strong>Observación de Jefatura:</strong><br> <span id="evidence-observation"></span></p>
           <hr>
@@ -113,24 +147,116 @@
   </div>
 </div>
 
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-    const detailBtns = document.querySelectorAll('[data-evidence-detail]');
-    
-    const evidenceModal = new bootstrap.Modal(document.getElementById('evidenceModal'));
+<!-- Modales de corrección (solo para evidencias propias NO aprobadas) -->
+{% for item in evidencias_reales %}
+{% if item.puede_editar %}
+{% with e=item.obj %}
+<div class="modal fade" id="editEvModal{{ e.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Corregir Evidencia {{ e.codigo }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="editar_evidencia">
+        <input type="hidden" name="evidencia_id" value="{{ e.id }}">
+        <div class="modal-body">
+          {% if item.observacion_final %}
+          <div class="alert alert-info py-2 small">
+            <strong>Observación de jefatura:</strong> {{ item.observacion_final }}
+          </div>
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold small">Actividad / Solicitud *</label>
+              <textarea name="solicitud" class="form-control" rows="3" required>{{ e.solicitud }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold small">Acción Realizada *</label>
+              <textarea name="accion_realizada" class="form-control" rows="3" required>{{ e.accion }}</textarea>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">RUT vecino</label>
+              <input type="text" name="rut_vecino" class="form-control input-rut" value="{% if e.vecino %}{{ e.vecino.rut }}{% endif %}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">Nombre contacto</label>
+              <input type="text" name="contacto_nombre" class="form-control" value="{{ e.contacto_nombre|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">Teléfono</label>
+              <input type="text" name="contacto_telefono" class="form-control" value="{{ e.contacto_telefono|default:'' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Subtipo de atención</label>
+              <select name="subtipo_atencion_id" class="form-select">
+                <option value="">-- General --</option>
+                {% for st in subtipos_atencion %}
+                  <option value="{{ st.id }}" {% if e.subtipo_atencion_id == st.id %}selected{% endif %}>{{ st }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Reemplazar fotografía (opcional)</label>
+              <input type="file" name="fotografia" class="form-control" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="es_usuario_delegado" id="editDel{{ e.id }}" {% if e.es_usuario_delegado %}checked{% endif %}>
+                <label class="form-check-label small" for="editDel{{ e.id }}">El solicitante es el propio Delegado (no contabiliza)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top-0">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger" style="background-color: #ad0007;">Guardar y Reenviar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endwith %}
+{% endif %}
+{% endfor %}
 
-    detailBtns.forEach(btn => {
-      btn.addEventListener('click', function() {
-        document.getElementById('evidence-code').textContent = this.dataset.code;
-        document.getElementById('evidence-title').textContent = this.dataset.title;
-        document.getElementById('evidence-status').textContent = this.dataset.status;
-        document.getElementById('evidence-observation').textContent = this.dataset.observation;
-        document.getElementById('evidence-reviewer').textContent = this.dataset.reviewer;
-        document.getElementById('evidence-reviewdate').textContent = this.dataset.reviewdate;
-        
-        evidenceModal.show();
-      });
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const detailBtns = document.querySelectorAll("[data-evidence-detail]");
+  const evidenceModal = new bootstrap.Modal(document.getElementById("evidenceModal"));
+
+  detailBtns.forEach(btn => {
+    btn.addEventListener("click", function () {
+      document.getElementById("evidence-code").textContent = this.dataset.code;
+      document.getElementById("evidence-title").textContent = this.dataset.title;
+      document.getElementById("evidence-action").textContent = this.dataset.action;
+      document.getElementById("evidence-status").textContent = this.dataset.status;
+      document.getElementById("evidence-observation").textContent = this.dataset.observation;
+      document.getElementById("evidence-reviewer").textContent = this.dataset.reviewer;
+      document.getElementById("evidence-reviewdate").textContent = this.dataset.reviewdate;
+
+      const motivosEl = document.getElementById("evidence-motivos");
+      if (this.dataset.motivos) {
+        motivosEl.textContent = "Regla de puntaje (0 pts): " + this.dataset.motivos;
+        motivosEl.classList.remove("d-none");
+      } else {
+        motivosEl.classList.add("d-none");
+      }
+
+      const photoBox = document.getElementById("evidence-photo-box");
+      const photoImg = document.getElementById("evidence-photo");
+      if (this.dataset.image) {
+        photoImg.src = this.dataset.image;
+        photoBox.classList.remove("d-none");
+      } else {
+        photoImg.src = "";
+        photoBox.classList.add("d-none");
+      }
+      evidenceModal.show();
     });
   });
+});
 </script>
 {% endblock %}

@@ -862,8 +862,10 @@ class GestionSocial(models.Model):
 
     @property
     def puntaje_valido(self):
-        """Suma 1 punto si está aprobada y el ciudadano tiene nombre y teléfono."""
+        """Suma 1 punto si está aprobada, no es coordinación preparatoria y tiene nombre y teléfono."""
         if self.validacion not in ("Aprobado", "Aprobada"):
+            return 0
+        if self.subtipo_atencion and self.subtipo_atencion.es_coordinacion:
             return 0
         if not ((self.caso.usuario_nombre or "").strip() and (self.caso.telefono or "").strip()):
             return 0
