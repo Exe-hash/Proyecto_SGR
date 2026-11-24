@@ -1,47 +1,127 @@
 {% extends 'principal/base.html' %}
-{% block title %}Agenda colectiva{% endblock %}
+{% block title %}Agenda colectiva y Tubos | SGR{% endblock %}
 
 {% block content %}
 <div class="heading-row">
-  <h1>Agenda Colectiva (Tubo de Trabajo)</h1>
-  <div class="heading-actions">
-    <label class="search">
-      <svg class="icon"><use href="#icon-search"/></svg>
-      <span class="sr-only">Buscar compromiso</span>
-      <input type="search" placeholder="Buscar …" id="board-search">
-    </label>
-    <a class="button primary" href="{% url 'principal:actividades' %}">＋ &nbsp; Registrar actividad</a>
+  <div>
+    <h1 class="mb-1">Agenda Colectiva — {{ delegacion_usuario }}</h1>
+    <p class="text-muted small mb-0">Todos los funcionarios de la delegación pueden consultar ambos tubos; solo puedes modificar tus propios registros mientras no estén aprobados.</p>
+  </div>
+  <div class="heading-actions d-flex flex-wrap gap-2 align-items-center">
+    {% if tab_activo == 'seguimiento' %}
+      <label class="search">
+        <svg class="icon"><use href="#icon-search"/></svg>
+        <span class="sr-only">Buscar compromiso</span>
+        <input type="search" placeholder="Buscar código, RUT o solicitante…" id="board-search">
+      </label>
+      {% if puede_registrar_actividades %}
+        <a class="button primary" href="{% url 'principal:actividades' %}">＋ &nbsp; Registrar actividad</a>
+      {% endif %}
+    {% else %}
+      <label class="search">
+        <svg class="icon"><use href="#icon-search"/></svg>
+        <span class="sr-only">Buscar carta</span>
+        <input type="search" placeholder="Buscar código, N°, RUT o remite…" id="cartas-search" data-filtro-tabla="tabla-cartas">
+      </label>
+      <button type="button" class="button primary" data-bs-toggle="modal" data-bs-target="#modalNuevaCarta">
+        ＋ &nbsp; Nueva Carta
+      </button>
+    {% endif %}
   </div>
 </div>
 
-<div class="filters">
-  <label><span class="sr-only">Territorio</span>
-    <select id="board-territory">
-      <option value="">Territorio: Todos</option>
-      <!-- Opciones estáticas para el filtro visual -->
-      <option>Latorre</option>
-      <option>Toqui</option>
-      <option>Las Compañías Alta</option>
-      <option>Las Compañías Baja</option>
-    </select>
-  </label>
-  <label><span class="sr-only">Responsable</span>
-    <select id="board-person">
-      <option value="">Responsable: Todos</option>
-    </select>
-  </label>
-  <label><span class="sr-only">Área de apoyo</span>
-    <select id="board-area">
-      <option value="">Área de Apoyo: Todas</option>
-      <option>Alumbrado público</option>
-      <option>Aseo y ornato</option>
-      <option>Tránsito</option>
-    </select>
-  </label>
-</div>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link fw-bold {% if tab_activo == 'seguimiento' %}active text-danger{% else %}text-secondary{% endif %}"
+       href="{% url 'principal:agenda' %}?tab=seguimiento">
+      Tubo de Seguimiento <span class="badge bg-secondary ms-1">{{ total_seguimiento }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-bold {% if tab_activo == 'cartas' %}active text-danger{% else %}text-secondary{% endif %}"
+       href="{% url 'principal:agenda' %}?tab=cartas">
+      Tubo de Cartas (Oficina de Partes) <span class="badge bg-secondary ms-1">{{ total_cartas }}</span>
+    </a>
+  </li>
+</ul>
+
+
+<form method="get" class="card shadow-sm border-0 rounded-4 p-3 mb-4">
+  <input type="hidden" name="tab" value="{{ tab_activo }}">
+  <div class="row g-2 align-items-end">
+    {% if es_superusuario %}
+    <div class="col-md-2">
+      <label class="form-label small fw-bold mb-1">Delegación</label>
+      <select name="delegacion_id" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for d in delegaciones_filtro %}
+          <option value="{{ d.id }}" {% if filtro_deleg == d.id|stringformat:"s" %}selected{% endif %}>{{ d.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold mb-1">Funcionario</label>
+      <select name="funcionario_id" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for f in funcionarios_filtro %}
+          <option value="{{ f.id }}" {% if filtro_func == f.id|stringformat:"s" %}selected{% endif %}>{{ f.get_full_name|default:f.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold mb-1">Desde</label>
+      <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde|date:'Y-m-d' }}">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold mb-1">Hasta</label>
+      <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta|date:'Y-m-d' }}">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold mb-1">Estado</label>
+      <select name="estado" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% if tab_activo == 'seguimiento' %}
+          <option value="Pendiente" {% if filtro_estado == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+          <option value="En proceso" {% if filtro_estado == 'En proceso' %}selected{% endif %}>En proceso</option>
+          <option value="Completado" {% if filtro_estado == 'Completado' %}selected{% endif %}>Completado</option>
+          <option value="Rechazado" {% if filtro_estado == 'Rechazado' %}selected{% endif %}>Rechazado</option>
+        {% else %}
+          <option value="En proceso" {% if filtro_estado == 'En proceso' %}selected{% endif %}>En proceso</option>
+          <option value="Aprobada" {% if filtro_estado == 'Aprobada' %}selected{% endif %}>Aprobada</option>
+          <option value="Finalizada" {% if filtro_estado == 'Finalizada' %}selected{% endif %}>Finalizada</option>
+          <option value="No aplica" {% if filtro_estado == 'No aplica' %}selected{% endif %}>No aplica</option>
+        {% endif %}
+      </select>
+    </div>
+
+    {% if tab_activo == 'seguimiento' %}
+    <div class="col-md-2">
+      <label class="form-label small fw-bold mb-1">Sector</label>
+      <select name="sector_id" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for t in territorios_filtro %}
+          <option value="{{ t.id }}" {% if filtro_sector == t.id|stringformat:"s" %}selected{% endif %}>{{ t.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="col-auto d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-danger fw-bold" style="background-color: #ad0007;">Filtrar</button>
+      <a href="{% url 'principal:agenda' %}?tab={{ tab_activo }}" class="btn btn-sm btn-light border">Limpiar</a>
+    </div>
+  </div>
+</form>
+
+{% if tab_activo == 'seguimiento' %}
 
 <section class="board" aria-label="Compromisos por estado">
-  <!-- Columna 1: Pendiente -->
   <div class="board-column pendiente" data-board-column="Pendiente">
     <h2><i></i>Pendiente <span data-count></span></h2>
     <div class="board-cards">
@@ -53,7 +133,6 @@
     </div>
   </div>
 
-  <!-- Columna 2: En proceso -->
   <div class="board-column proceso" data-board-column="En proceso">
     <h2><i></i>En proceso <span data-count></span></h2>
     <div class="board-cards">
@@ -65,7 +144,6 @@
     </div>
   </div>
 
-  <!-- Columna 3: Completado -->
   <div class="board-column realizado" data-board-column="Completado">
     <h2><i></i>Completado <span data-count></span></h2>
     <div class="board-cards">
@@ -77,7 +155,6 @@
     </div>
   </div>
 
-  <!-- Columna 4: Rechazado -->
   <div class="board-column ingresado" data-board-column="Rechazado">
     <h2><i></i>Rechazado <span data-count></span></h2>
     <div class="board-cards">
@@ -90,7 +167,7 @@
   </div>
 </section>
 
-<!-- Restauramos el diseño exacto, pero envuelto en un formulario -->
+
 <aside id="commitment-drawer" class="drawer" hidden aria-label="Detalle del compromiso">
   <form method="post">
     {% csrf_token %}
@@ -98,12 +175,12 @@
       <h2>Detalle del Compromiso</h2>
       <button type="button" id="drawer-close" aria-label="Cerrar detalle">×</button>
     </div>
-    
-    <!-- Mantenemos el código visual intacto -->
+
     <p>Código: <strong id="detail-code"></strong></p>
-    <!-- Agregamos un campo invisible para que Python sepa qué guardar -->
     <input type="hidden" name="codigo" id="hidden-detail-code">
-    
+
+    <div id="drawer-readonly-alert" class="alert alert-warning py-2 small d-none"></div>
+
     <label>Estado Actual
       <select id="detail-state" name="nuevo_estado">
         <option value="Pendiente">Pendiente</option>
@@ -112,52 +189,402 @@
         <option value="Rechazado">Rechazado</option>
       </select>
     </label>
-    
+
     <p class="detail-info">
       Solicitante: <span id="detail-requester"></span><br>
       Área de Apoyo: <span id="detail-area"></span><br>
-      Territorio: <span id="detail-territory"></span>
+      Delegación / Sector: <span id="detail-territory"></span>
     </p>
-    
+
     <label>Responsable
       <input id="detail-responsible" readonly>
     </label>
     <label>Fecha Comprometida
       <input id="detail-date" type="date" readonly>
     </label>
-    
-    <!-- Recuperamos el título del historial -->
+
     <h3>Historial de Avance y Observaciones</h3>
     <div id="drawer-history-container"></div>
-    
-    <!-- Recuperamos tu barra de texto original y su botón rojo -->
-    <div class="drawer-observation">
+
+    <div class="drawer-observation" id="drawer-edit-controls">
       <label class="sr-only" for="drawer-comment">Nueva observación</label>
       <input id="drawer-comment" name="observacion" placeholder="Nueva observación o avance…">
-      <!-- Este botón mantiene su clase visual, pero ahora hace el Update (type="submit") -->
-      <button type="submit" class="button primary" id="add-comment">Agregar</button>
+      <button type="submit" class="button primary" id="add-comment">Guardar</button>
     </div>
-    <small>Los cambios de estado se guardarán al presionar Agregar.</small>
+    <small id="drawer-edit-hint">Los cambios de estado se guardarán al presionar Guardar.</small>
   </form>
 </aside>
 
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-    const cards = document.querySelectorAll('.commitment-card');
-    const drawer = document.getElementById('commitment-drawer');
-    const closeBtn = document.getElementById('drawer-close');
-    const selectState = document.getElementById('detail-state');
-    const formDrawer = drawer.querySelector('form');
+{% else %}
 
-    // 1. Diccionario de colores suaves para el menú desplegable (Fondo y Texto)
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm rounded-4 p-3 text-center h-100">
+      <small class="text-primary fw-bold">EN PROCESO</small>
+      <h3 class="fw-bold mb-0">{{ resumen_cartas.en_proceso }}</h3>
+      <small class="text-muted">{{ resumen_cartas.pct_en_proceso }}%</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm rounded-4 p-3 text-center h-100">
+      <small class="text-success fw-bold">APROBADA</small>
+      <h3 class="fw-bold mb-0 text-success">{{ resumen_cartas.aprobada }}</h3>
+      <small class="text-muted">{{ resumen_cartas.pct_aprobada }}%</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm rounded-4 p-3 text-center h-100">
+      <small class="fw-bold" style="color: #166534;">FINALIZADA</small>
+      <h3 class="fw-bold mb-0" style="color: #166534;">{{ resumen_cartas.finalizada }}</h3>
+      <small class="text-muted">{{ resumen_cartas.pct_finalizada }}%</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 text-center h-100">
+      <small class="text-warning fw-bold">NO APLICA (Solo conocimiento)</small>
+      <h3 class="fw-bold mb-0">{{ resumen_cartas.no_aplica }}</h3>
+      <small class="text-muted">Excluida del % de gestión</small>
+    </div>
+  </div>
+  <div class="col-12 col-md-3">
+    <div class="card border-0 shadow-sm rounded-4 p-3 text-center h-100 bg-light">
+      <small class="text-dark fw-bold">TOTAL CARTAS / APLICABLES</small>
+      <h3 class="fw-bold mb-0">{{ resumen_cartas.total }} <span class="fs-6 text-muted">({{ resumen_cartas.aplicables }} aplic.)</span></h3>
+      <small class="text-muted">100% base Oficina de Partes</small>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4 mb-4">
+  <div class="table-responsive">
+    <table id="tabla-cartas" class="table table-hover align-middle mb-0 small">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Fecha / Código</th>
+          <th>N° Carta</th>
+          <th>Para</th>
+          <th>Remite / Fono</th>
+          <th>Actividad o Tema</th>
+          <th>Encargado</th>
+          <th>Estado</th>
+          <th>Pronuncia / Derivada</th>
+          <th class="text-end pe-3">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for carta in cartas_reales %}
+        <tr>
+          <td class="ps-3 text-nowrap">
+            <strong>{{ carta.codigo }}</strong><br>
+            <span class="text-muted">{{ carta.fecha_ingreso|date:"d/m/Y" }}</span>
+          </td>
+          <td class="fw-bold">{{ carta.numero_carta|default:"-" }}</td>
+          <td>{{ carta.para }}</td>
+          <td>
+            <strong>{{ carta.remitente }}</strong>
+            {% if carta.rut_remitente %}<br><span class="text-muted">{{ carta.rut_remitente }}</span>{% endif %}
+            {% if carta.telefono %}<br><span class="text-muted">{{ carta.telefono }}</span>{% endif %}
+          </td>
+          <td style="max-width: 260px;">
+            {{ carta.actividad_tema|truncatechars:90 }}
+            {% if carta.fecha_actividad %}<br><span class="badge bg-light text-dark border">Fecha: {{ carta.fecha_actividad }}</span>{% endif %}
+          </td>
+          <td>
+            {{ carta.encargado_area|default:"-" }}<br>
+            <span class="text-muted">Resp: {{ carta.responsable.get_full_name|default:carta.responsable.username }}</span>
+          </td>
+          <td>
+            {% if carta.estado == 'Aprobada' %}
+              <span class="badge bg-success">Aprobada</span>
+            {% elif carta.estado == 'Finalizada' %}
+              <span class="badge" style="background-color: #166534;">Finalizada</span>
+            {% elif carta.estado == 'En proceso' %}
+              <span class="badge bg-primary">En proceso</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">No aplica</span>
+            {% endif %}
+          </td>
+          <td>
+            <div><strong>Pron:</strong> {{ carta.pronuncia }}</div>
+            {% if carta.derivada_a %}<div><strong>Der:</strong> {{ carta.derivada_a }}</div>{% endif %}
+          </td>
+          <td class="text-end pe-3 text-nowrap">
+            {% if carta.puede_editar_ui %}
+              <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarCarta{{ carta.id }}">
+                Gestionar
+              </button>
+            {% elif carta.esta_bloqueada %}
+              <span class="badge bg-light text-success border">Bloqueada</span>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarCarta{{ carta.id }}">
+                Ver
+              </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="text-center p-5 text-muted">No hay cartas registradas para los filtros seleccionados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<div class="modal fade" id="modalNuevaCarta" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Registrar Carta — Oficina de Partes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'principal:crear_carta' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">N° Oficina de Partes</label>
+              <input type="text" name="numero_carta" class="form-control" placeholder="Ej: 10011">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Para</label>
+              <select name="para" class="form-select">
+                <option value="Alcaldesa">Alcaldesa</option>
+                <option value="Delegado/a">Delegado/a</option>
+                <option value="Dirección Municipal">Dirección Municipal</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Estado inicial</label>
+              <select name="estado" class="form-select">
+                <option value="En proceso">En proceso</option>
+                <option value="No aplica">No aplica</option>
+                {% if es_supervisor %}
+                  <option value="Aprobada">Aprobada</option>
+                  <option value="Finalizada">Finalizada</option>
+                {% endif %}
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">RUT Remitente (autocompleta)</label>
+              <input type="text" id="carta-rut" name="rut_remitente" class="form-control input-rut" placeholder="12.345.678-9">
+              <small id="carta-rut-msg" class="text-muted"></small>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small fw-bold">Remite *</label>
+              <input type="text" id="carta-remite" name="remitente" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">Fono</label>
+              <input type="text" id="carta-fono" name="telefono" class="form-control">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label small fw-bold">Actividad o Tema *</label>
+              <textarea name="actividad_tema" class="form-control" rows="2" required></textarea>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Fecha actividad / plazo</label>
+              <input type="text" name="fecha_actividad" class="form-control" placeholder="Ej: 17-07-2026 o ACTUAL">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Encargado / Unidad</label>
+              <input type="text" name="encargado_area" class="form-control" placeholder="Ej: Patentes, Patrocinios, Delegación">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Funcionario responsable</label>
+              <select name="responsable_id" class="form-select">
+                <option value="{{ request.user.id }}">Yo mismo ({{ nombre_usuario }})</option>
+                {% for f in funcionarios_filtro %}
+                  {% if f.id != request.user.id %}
+                    <option value="{{ f.id }}">{{ f.get_full_name|default:f.username }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Se pronuncia</label>
+              <select name="pronuncia" class="form-select">
+                <option value="No aplica">No aplica</option>
+                <option value="Delegado">Delegado</option>
+                <option value="Alcaldesa">Alcaldesa</option>
+                <option value="Gabinete">Gabinete</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Derivada a</label>
+              <input type="text" name="derivada_a" class="form-control" placeholder="Ej: DOM, DISERCO, Gabinete">
+            </div>
+            {% if es_superusuario %}
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Delegación</label>
+              <select name="delegacion_id" class="form-select">
+                {% for d in delegaciones_filtro %}
+                  <option value="{{ d.id }}">{{ d.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            <div class="col-12">
+              <label class="form-label small fw-bold">Observación</label>
+              <textarea name="observacion" class="form-control" rows="2" placeholder="Ej: Para conocimiento de la delegación..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top-0">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger fw-bold" style="background-color: #ad0007;">Guardar Carta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{% for carta in cartas_reales %}
+<div class="modal fade" id="modalEditarCarta{{ carta.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Carta {{ carta.codigo }} {% if carta.numero_carta %}(N° {{ carta.numero_carta }}){% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'principal:editar_carta' %}">
+        {% csrf_token %}
+        <input type="hidden" name="carta_id" value="{{ carta.id }}">
+        <div class="modal-body">
+          {% if carta.esta_bloqueada %}
+            <div class="alert alert-success py-2 small">Esta carta está en estado <strong>{{ carta.estado }}</strong> y no permite modificaciones.</div>
+          {% elif not carta.puede_editar_ui %}
+            <div class="alert alert-secondary py-2 small">Solo el funcionario responsable o un Supervisor puede modificar esta carta.</div>
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">N° Oficina de Partes</label>
+              <input type="text" name="numero_carta" class="form-control" value="{{ carta.numero_carta }}" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Para</label>
+              <select name="para" class="form-select" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+                <option value="Alcaldesa" {% if carta.para == 'Alcaldesa' %}selected{% endif %}>Alcaldesa</option>
+                <option value="Delegado/a" {% if carta.para == 'Delegado/a' %}selected{% endif %}>Delegado/a</option>
+                <option value="Dirección Municipal" {% if carta.para == 'Dirección Municipal' %}selected{% endif %}>Dirección Municipal</option>
+                <option value="Otro" {% if carta.para == 'Otro' %}selected{% endif %}>Otro</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Estado</label>
+              <select name="estado" class="form-select" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+                <option value="En proceso" {% if carta.estado == 'En proceso' %}selected{% endif %}>En proceso</option>
+                <option value="No aplica" {% if carta.estado == 'No aplica' %}selected{% endif %}>No aplica</option>
+                <option value="Finalizada" {% if carta.estado == 'Finalizada' %}selected{% endif %}>Finalizada</option>
+                {% if es_supervisor or carta.estado == 'Aprobada' %}
+                  <option value="Aprobada" {% if carta.estado == 'Aprobada' %}selected{% endif %}>Aprobada</option>
+                {% endif %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Fono</label>
+              <input type="text" name="telefono" class="form-control" value="{{ carta.telefono }}" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Fecha actividad / plazo</label>
+              <input type="text" name="fecha_actividad" class="form-control" value="{{ carta.fecha_actividad }}" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Encargado / Unidad</label>
+              <input type="text" name="encargado_area" class="form-control" value="{{ carta.encargado_area }}" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-bold">Actividad o Tema</label>
+              <textarea name="actividad_tema" class="form-control" rows="2" {% if not carta.puede_editar_ui %}disabled{% endif %}>{{ carta.actividad_tema }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Se pronuncia</label>
+              <select name="pronuncia" class="form-select" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+                <option value="No aplica" {% if carta.pronuncia == 'No aplica' %}selected{% endif %}>No aplica</option>
+                <option value="Delegado" {% if carta.pronuncia == 'Delegado' %}selected{% endif %}>Delegado</option>
+                <option value="Alcaldesa" {% if carta.pronuncia == 'Alcaldesa' %}selected{% endif %}>Alcaldesa</option>
+                <option value="Gabinete" {% if carta.pronuncia == 'Gabinete' %}selected{% endif %}>Gabinete</option>
+                <option value="Otro" {% if carta.pronuncia == 'Otro' %}selected{% endif %}>Otro</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Derivada a</label>
+              <input type="text" name="derivada_a" class="form-control" value="{{ carta.derivada_a }}" {% if not carta.puede_editar_ui %}disabled{% endif %}>
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-bold">Observación</label>
+              <textarea name="observacion" class="form-control" rows="2" {% if not carta.puede_editar_ui %}disabled{% endif %}>{{ carta.observacion }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top-0">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+          {% if carta.puede_editar_ui %}
+            <button type="submit" class="btn btn-danger fw-bold" style="background-color: #ad0007;">Guardar Cambios</button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const normalizar = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const boardSearch = document.getElementById("board-search");
+  const cards = Array.from(document.querySelectorAll(".commitment-card"));
+
+  function actualizarContadoresKanban() {
+    document.querySelectorAll(".board-column").forEach(col => {
+      const visibles = col.querySelectorAll(".commitment-card:not(.d-none)").length;
+      const badge = col.querySelector("[data-count]");
+      if (badge) badge.textContent = `(${visibles})`;
+    });
+  }
+
+  if (boardSearch) {
+    boardSearch.addEventListener("input", function () {
+      const q = normalizar(this.value.trim());
+      cards.forEach(card => {
+        const texto = normalizar(`${card.dataset.code} ${card.dataset.rut} ${card.dataset.requester} ${card.dataset.title} ${card.dataset.responsible}`);
+        card.classList.toggle("d-none", Boolean(q) && !texto.includes(q));
+      });
+      actualizarContadoresKanban();
+    });
+  }
+  actualizarContadoresKanban();
+
+
+  const drawer = document.getElementById("commitment-drawer");
+  if (drawer) {
+    const closeBtn = document.getElementById("drawer-close");
+    const selectState = document.getElementById("detail-state");
+    const commentInput = document.getElementById("drawer-comment");
+    const submitBtn = document.getElementById("add-comment");
+    const readonlyAlert = document.getElementById("drawer-readonly-alert");
+    const editHint = document.getElementById("drawer-edit-hint");
+    const formDrawer = drawer.querySelector("form");
+
     const coloresEstado = {
-      "Pendiente": { bg: "#fef3c7", text: "#92400e" },   // Amarillo suave
-      "En proceso": { bg: "#dbeafe", text: "#1e40af" },  // Azul suave
-      "Completado": { bg: "#dcfce3", text: "#166534" },  // Verde suave
-      "Rechazado": { bg: "#fee2e2", text: "#991b1b" }    // Rojo suave
+      "Pendiente": { bg: "#fef3c7", text: "#92400e" },
+      "En proceso": { bg: "#dbeafe", text: "#1e40af" },
+      "Completado": { bg: "#dcfce3", text: "#166534" },
+      "Rechazado": { bg: "#fee2e2", text: "#991b1b" }
     };
 
-    // Función para pintar el cuadro de selección
     function actualizarColorSelect() {
       const color = coloresEstado[selectState.value];
       if (color) {
@@ -166,58 +593,96 @@
         selectState.style.fontWeight = "600";
       }
     }
-
-    // Escuchamos si el usuario cambia el estado a mano para cambiar el color en vivo
-    selectState.addEventListener('change', actualizarColorSelect);
+    selectState.addEventListener("change", actualizarColorSelect);
 
     cards.forEach(card => {
-      card.addEventListener('click', function() {
-        document.getElementById('detail-code').textContent = this.dataset.code;
-        document.getElementById('hidden-detail-code').value = this.dataset.code;
-        
+      card.addEventListener("click", function () {
+        document.getElementById("detail-code").textContent = this.dataset.code;
+        document.getElementById("hidden-detail-code").value = this.dataset.code;
         selectState.value = this.dataset.state;
-        // Aplicamos el color inmediatamente al abrir el cajón
         actualizarColorSelect();
-        
-        const [year, month, day] = this.dataset.date.split('-');
-        document.getElementById('detail-requester').textContent = `${this.dataset.requester} (Fecha: ${day}/${month}/${year})`;
-        
-        document.getElementById('detail-area').textContent = this.dataset.area;
-        document.getElementById('detail-territory').textContent = this.dataset.territory;
-        document.getElementById('detail-responsible').value = this.dataset.responsible;
-        
-        // Copiamos el historial oculto de la tarjeta al cajón
-        document.getElementById('drawer-history-container').innerHTML = this.querySelector('.historial-oculto').innerHTML;
-        
-        drawer.removeAttribute('hidden');
+
+        const [year, month, day] = this.dataset.date.split("-");
+        const rutTxt = this.dataset.rut ? ` · RUT: ${this.dataset.rut}` : "";
+        document.getElementById("detail-requester").textContent = `${this.dataset.requester}${rutTxt} (Fecha: ${day}/${month}/${year})`;
+        document.getElementById("detail-area").textContent = this.dataset.area;
+        document.getElementById("detail-territory").textContent = this.dataset.sector
+          ? `${this.dataset.territory} / ${this.dataset.sector}`
+          : this.dataset.territory;
+        document.getElementById("detail-responsible").value = this.dataset.responsible;
+        document.getElementById("detail-date").value = this.dataset.duedate || this.dataset.date;
+        document.getElementById("drawer-history-container").innerHTML = this.querySelector(".historial-oculto").innerHTML;
+
+        const editable = this.dataset.editable === "1";
+        const bloqueado = this.dataset.bloqueado === "1";
+        selectState.disabled = !editable;
+        commentInput.disabled = !editable;
+        submitBtn.disabled = !editable;
+        editHint.style.display = editable ? "block" : "none";
+
+        if (bloqueado) {
+          readonlyAlert.textContent = "Este compromiso está aprobado o completado y no permite modificaciones.";
+          readonlyAlert.classList.remove("d-none");
+        } else if (!editable) {
+          readonlyAlert.textContent = "Modo solo consulta: solo el funcionario responsable o un Supervisor puede modificar este registro.";
+          readonlyAlert.classList.remove("d-none");
+        } else {
+          readonlyAlert.classList.add("d-none");
+        }
+
+        drawer.removeAttribute("hidden");
       });
     });
 
-    if(closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        drawer.setAttribute('hidden', '');
-      });
-    }
-
-    // 2. Truco de memoria para evitar que el cajón parezca cerrarse
+    if (closeBtn) closeBtn.addEventListener("click", () => drawer.setAttribute("hidden", ""));
     if (formDrawer) {
-      formDrawer.addEventListener('submit', function() {
-        // Justo antes de que la página recargue, guardamos el código de esta tarjeta
-        localStorage.setItem('tarjetaAbierta', document.getElementById('hidden-detail-code').value);
+      formDrawer.addEventListener("submit", () => {
+        localStorage.setItem("tarjetaAbierta", document.getElementById("hidden-detail-code").value);
       });
     }
 
-    // Apenas la página carga, revisamos si el navegador recuerda alguna tarjeta
-    const tarjetaGuardada = localStorage.getItem('tarjetaAbierta');
+    const tarjetaGuardada = localStorage.getItem("tarjetaAbierta");
     if (tarjetaGuardada) {
-      localStorage.removeItem('tarjetaAbierta'); // Limpiamos la memoria
-      
-      // Buscamos la tarjeta exacta en el tablero y la "cliqueamos" con código
-      const tarjetaAutoclick = document.querySelector(`.commitment-card[data-code="${tarjetaGuardada}"]`);
-      if (tarjetaAutoclick) {
-        tarjetaAutoclick.click();
-      }
+      localStorage.removeItem("tarjetaAbierta");
+      const target = document.querySelector(`.commitment-card[data-code="${tarjetaGuardada}"]`);
+      if (target) target.click();
     }
-  });
+  }
+
+
+  const cartasSearch = document.getElementById("cartas-search");
+  if (cartasSearch) {
+    cartasSearch.addEventListener("input", function () {
+      const q = normalizar(this.value.trim());
+      document.querySelectorAll("#tabla-cartas tbody tr").forEach(tr => {
+        tr.style.display = (!q || normalizar(tr.textContent).includes(q)) ? "" : "none";
+      });
+    });
+  }
+
+
+  const cartaRut = document.getElementById("carta-rut");
+  if (cartaRut) {
+    cartaRut.addEventListener("blur", function () {
+      const rut = this.value.trim();
+      const msg = document.getElementById("carta-rut-msg");
+      if (!rut) { msg.textContent = ""; return; }
+      fetch("{% url 'principal:api_buscar_vecino' %}?rut=" + encodeURIComponent(rut))
+        .then(r => r.json())
+        .then(data => {
+          if (data.encontrado) {
+            if (data.nombre) document.getElementById("carta-remite").value = data.nombre;
+            if (data.telefono) document.getElementById("carta-fono").value = data.telefono;
+            msg.textContent = "Vecino encontrado: datos autocompletados.";
+            msg.className = "text-success small";
+          } else {
+            msg.textContent = "Remitente nuevo.";
+            msg.className = "text-muted small";
+          }
+        })
+        .catch(() => {});
+    });
+  }
+});
 </script>
 {% endblock %}

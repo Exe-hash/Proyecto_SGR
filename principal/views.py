@@ -52,6 +52,9 @@ from .reglas import (
     validar_semana_abierta,
 )
 
+from django.urls import reverse, reverse_lazy
+from .models import CartaOficinaPartes
+
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
     return (
@@ -420,40 +423,322 @@ def actividades(request):
     )
 
 
+def _compromiso_esta_bloqueado(compromiso):
+    """Un compromiso queda inmutable si está Completado o su evidencia origen ya fue Aprobada."""
+    if compromiso.estado == "Completado":
+        return True
+    try:
+        ev_origen = compromiso.evidencia_origen
+    except Evidencia.DoesNotExist:
+        ev_origen = None
+    return bool(ev_origen and es_registro_aprobado(ev_origen.estado))
+
+
 @requiere_roles("Funcionario", "Supervisor")
+@transaction.atomic
 def agenda(request):
+    perfil = getattr(request.user, "perfil", None)
+    es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
+    delegacion_usuario = perfil.delegacion if (perfil and not request.user.is_superuser) else None
+
+
     if request.method == "POST":
-        codigo_recibido = request.POST.get("codigo")
-        nuevo_estado = request.POST.get("nuevo_estado")
-        nuevo_texto = request.POST.get("observacion")
+        codigo_recibido = (request.POST.get("codigo") or "").strip()
+        nuevo_estado = (request.POST.get("nuevo_estado") or "").strip()
+        nuevo_texto = (request.POST.get("observacion") or "").strip()
 
-        if codigo_recibido and nuevo_estado:
-            compromiso = get_object_or_404(Compromiso, codigo=codigo_recibido)
-            compromiso.estado = nuevo_estado
-            compromiso.save()
+        if not (codigo_recibido and nuevo_estado):
+            messages.error(request, "Datos incompletos para actualizar el compromiso.")
+            return redirect("principal:agenda")
 
-            if nuevo_texto:
-                Observacion.objects.create(
-                    compromiso=compromiso,
-                    autor=request.user,
-                    texto=nuevo_texto,
-                )
+        if nuevo_estado not in {"Pendiente", "En proceso", "Completado", "Rechazado", "Vencido"}:
+            messages.error(request, "Estado de compromiso inválido.")
+            return redirect("principal:agenda")
 
+        compromiso = get_object_or_404(
+            Compromiso.objects.select_related("evidencia_origen"),
+            codigo=codigo_recibido,
+        )
+
+        # Control de delegación
+        if delegacion_usuario and compromiso.territorio_id != delegacion_usuario.id:
+            raise PermissionDenied("No tienes permiso para acceder a compromisos de otra delegación.")
+
+        # Control de propiedad del registro (solo propios para Funcionario)
+        es_dueno = (
+            compromiso.responsable_id == request.user.id
+            or compromiso.creado_por_id == request.user.id
+        )
+        if not (es_dueno or es_supervisor):
+            raise PermissionDenied("Solo puedes modificar tus propios registros en el Tubo.")
+
+        # Inmutabilidad de registros aprobados / completados
+        if _compromiso_esta_bloqueado(compromiso):
+            messages.error(
+                request,
+                f"El compromiso {compromiso.codigo} ya está aprobado/completado y no permite modificaciones.",
+            )
+            return redirect("principal:agenda")
+
+        compromiso.estado = nuevo_estado
+        compromiso.save(update_fields=["estado", "actualizado_en"])
+
+        if nuevo_texto:
+            Observacion.objects.create(
+                compromiso=compromiso,
+                autor=request.user,
+                texto=nuevo_texto,
+            )
+
+        messages.success(request, f"Compromiso {compromiso.codigo} actualizado a '{nuevo_estado}'.")
         return redirect("principal:agenda")
 
+
+    tab_activo = request.GET.get("tab", "seguimiento")
+    if tab_activo not in ("seguimiento", "cartas"):
+        tab_activo = "seguimiento"
+
     inicio_periodo, fin_periodo = _rango_periodo_activo(request)
-    compromisos_reales = Compromiso.objects.filter(
-        fecha__range=(inicio_periodo, fin_periodo)
+    fecha_desde_str = (request.GET.get("fecha_desde") or "").strip()
+    fecha_hasta_str = (request.GET.get("fecha_hasta") or "").strip()
+    filtro_func = (request.GET.get("funcionario_id") or "").strip()
+    filtro_estado = (request.GET.get("estado") or "").strip()
+    filtro_area = (request.GET.get("area") or "").strip()
+    filtro_sector = (request.GET.get("sector_id") or "").strip()
+    filtro_deleg = (request.GET.get("delegacion_id") or "").strip()
+
+    try:
+        fecha_desde = date.fromisoformat(fecha_desde_str) if fecha_desde_str else inicio_periodo
+    except ValueError:
+        fecha_desde = inicio_periodo
+    try:
+        fecha_hasta = date.fromisoformat(fecha_hasta_str) if fecha_hasta_str else fin_periodo
+    except ValueError:
+        fecha_hasta = fin_periodo
+
+
+    compromisos_qs = (
+        Compromiso.objects.filter(fecha__range=(fecha_desde, fecha_hasta))
+        .select_related("territorio", "sector", "vecino", "responsable", "creado_por", "evidencia_origen")
+        .prefetch_related("observaciones__autor")
+        .order_by("-fecha", "-id")
     )
+    cartas_qs = (
+        CartaOficinaPartes.objects.filter(fecha_ingreso__range=(fecha_desde, fecha_hasta))
+        .select_related("delegacion", "vecino", "responsable", "creado_por")
+        .order_by("-fecha_ingreso", "-id")
+    )
+
+    if delegacion_usuario:
+        compromisos_qs = compromisos_qs.filter(territorio=delegacion_usuario)
+        cartas_qs = cartas_qs.filter(delegacion=delegacion_usuario)
+    elif filtro_deleg.isdigit():
+        compromisos_qs = compromisos_qs.filter(territorio_id=int(filtro_deleg))
+        cartas_qs = cartas_qs.filter(delegacion_id=int(filtro_deleg))
+
+
+    total_seguimiento = compromisos_qs.count()
+    total_cartas_all = cartas_qs.count()
+
+
+    if filtro_func.isdigit():
+        compromisos_qs = compromisos_qs.filter(responsable_id=int(filtro_func))
+        cartas_qs = cartas_qs.filter(responsable_id=int(filtro_func))
+
+    if filtro_area:
+        compromisos_qs = compromisos_qs.filter(area__iexact=filtro_area)
+    if filtro_sector.isdigit():
+        compromisos_qs = compromisos_qs.filter(sector_id=int(filtro_sector))
+
+    if filtro_estado:
+        if tab_activo == "seguimiento":
+            compromisos_qs = compromisos_qs.filter(estado=filtro_estado)
+        else:
+            cartas_qs = cartas_qs.filter(estado=filtro_estado)
+
+
+    compromisos_reales = []
+    for c in compromisos_qs:
+        bloqueado = _compromiso_esta_bloqueado(c)
+        es_dueno = c.responsable_id == request.user.id or c.creado_por_id == request.user.id
+        c.esta_bloqueado_ui = bloqueado
+        c.es_dueno_ui = es_dueno
+        c.puede_editar_ui = (not bloqueado) and (es_dueno or es_supervisor)
+        compromisos_reales.append(c)
+
+
+    cartas_lista = list(cartas_qs)
+    c_en_proceso = sum(1 for x in cartas_lista if x.estado == "En proceso")
+    c_aprobada = sum(1 for x in cartas_lista if x.estado == "Aprobada")
+    c_finalizada = sum(1 for x in cartas_lista if x.estado == "Finalizada")
+    c_no_aplica = sum(1 for x in cartas_lista if x.estado == "No aplica")
+    c_aplicables = c_en_proceso + c_aprobada + c_finalizada
+
+    resumen_cartas = {
+        "total": len(cartas_lista),
+        "aplicables": c_aplicables,
+        "en_proceso": c_en_proceso,
+        "aprobada": c_aprobada,
+        "finalizada": c_finalizada,
+        "no_aplica": c_no_aplica,
+        "pct_en_proceso": round((c_en_proceso / c_aplicables * 100), 2) if c_aplicables else 0,
+        "pct_aprobada": round((c_aprobada / c_aplicables * 100), 2) if c_aplicables else 0,
+        "pct_finalizada": round((c_finalizada / c_aplicables * 100), 2) if c_aplicables else 0,
+    }
+
+    for carta in cartas_lista:
+        es_dueno_carta = carta.responsable_id == request.user.id or carta.creado_por_id == request.user.id
+        carta.es_dueno_ui = es_dueno_carta
+        carta.puede_editar_ui = (not carta.esta_bloqueada) and (es_dueno_carta or es_supervisor)
+
+    funcionarios_qs = User.objects.filter(is_active=True).select_related("perfil__delegacion").order_by("first_name", "username")
+    if delegacion_usuario:
+        funcionarios_qs = funcionarios_qs.filter(perfil__delegacion=delegacion_usuario)
+
+    territorios_qs = Territorio.objects.filter(activo=True).select_related("delegacion")
+    if delegacion_usuario:
+        territorios_qs = territorios_qs.filter(delegacion=delegacion_usuario)
 
     return renderizar(
         request,
         "principal/agenda.html",
         {
             "pagina": "agenda",
+            "tab_activo": tab_activo,
             "compromisos_reales": compromisos_reales,
+            "cartas_reales": cartas_lista,
+            "resumen_cartas": resumen_cartas,
+            "total_seguimiento": total_seguimiento,
+            "total_cartas": total_cartas_all,
+            "funcionarios_filtro": funcionarios_qs,
+            "territorios_filtro": territorios_qs,
+            "delegaciones_filtro": Delegacion.objects.filter(activa=True),
+            "es_superusuario": request.user.is_superuser,
+            "es_supervisor": es_supervisor,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "filtro_func": filtro_func,
+            "filtro_estado": filtro_estado,
+            "filtro_area": filtro_area,
+            "filtro_sector": filtro_sector,
+            "filtro_deleg": filtro_deleg,
         },
     )
+
+
+@requiere_roles("Funcionario", "Supervisor")
+@transaction.atomic
+def crear_carta(request):
+    """Registra una nueva carta en el Tubo de Cartas de Oficina de Partes."""
+    if request.method != "POST":
+        return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+    hoy = timezone.localdate()
+    perfil = getattr(request.user, "perfil", None)
+    delegacion_id = (request.POST.get("delegacion_id") or "").strip()
+
+    if request.user.is_superuser and delegacion_id.isdigit():
+        delegacion = Delegacion.objects.filter(pk=int(delegacion_id)).first()
+    else:
+        delegacion = perfil.delegacion if perfil else Delegacion.objects.first()
+
+    if not delegacion:
+        messages.error(request, "No se pudo determinar la delegación para registrar la carta.")
+        return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+    remitente = (request.POST.get("remitente") or "").strip()
+    actividad_tema = (request.POST.get("actividad_tema") or "").strip()
+    if not (remitente and actividad_tema):
+        messages.error(request, "Debes completar el remitente y la actividad o tema de la carta.")
+        return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+    rut_raw = (request.POST.get("rut_remitente") or "").strip()
+    rut_norm = normalizar_rut(rut_raw) if rut_raw else ""
+    telefono = (request.POST.get("telefono") or "").strip()
+    vecino_obj = obtener_o_actualizar_vecino(rut_norm, remitente, telefono) if rut_norm else None
+
+    responsable_id = (request.POST.get("responsable_id") or "").strip()
+    responsable = (
+        User.objects.filter(pk=int(responsable_id), is_active=True).first()
+        if responsable_id.isdigit()
+        else request.user
+    ) or request.user
+
+    estado = (request.POST.get("estado") or "En proceso").strip()
+    if estado not in {"En proceso", "Aprobada", "Finalizada", "No aplica"}:
+        estado = "En proceso"
+    if not usuario_tiene_rol(request.user, "Supervisor") and estado in ("Aprobada", "Finalizada"):
+        estado = "En proceso"
+
+    carta = CartaOficinaPartes.objects.create(
+        numero_carta=(request.POST.get("numero_carta") or "").strip(),
+        delegacion=delegacion,
+        trimestre=obtener_trimestre_para_fecha(hoy),
+        fecha_ingreso=hoy,
+        para=(request.POST.get("para") or "Alcaldesa").strip(),
+        vecino=vecino_obj,
+        rut_remitente=rut_norm,
+        remitente=remitente,
+        telefono=telefono or (vecino_obj.telefono if vecino_obj else ""),
+        actividad_tema=actividad_tema,
+        fecha_actividad=(request.POST.get("fecha_actividad") or "").strip(),
+        encargado_area=(request.POST.get("encargado_area") or "").strip(),
+        responsable=responsable,
+        estado=estado,
+        pronuncia=(request.POST.get("pronuncia") or "No aplica").strip(),
+        derivada_a=(request.POST.get("derivada_a") or "").strip(),
+        observacion=(request.POST.get("observacion") or "").strip(),
+        creado_por=request.user,
+    )
+
+    messages.success(request, f"Carta {carta.codigo} registrada en el Tubo de Cartas.")
+    return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+
+@requiere_roles("Funcionario", "Supervisor")
+@transaction.atomic
+def editar_carta(request):
+    """Edita una carta existente validando delegación, propiedad e inmutabilidad."""
+    if request.method != "POST":
+        return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+    carta_id = request.POST.get("carta_id")
+    carta = get_object_or_404(CartaOficinaPartes, pk=carta_id)
+
+    perfil = getattr(request.user, "perfil", None)
+    es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
+    if perfil and not request.user.is_superuser and carta.delegacion_id != perfil.delegacion_id:
+        raise PermissionDenied("No tienes permiso para modificar cartas de otra delegación.")
+
+    es_dueno = carta.responsable_id == request.user.id or carta.creado_por_id == request.user.id
+    if not (es_dueno or es_supervisor):
+        raise PermissionDenied("Solo puedes modificar tus propias cartas en el Tubo.")
+
+    if carta.esta_bloqueada:
+        messages.error(request, f"La carta {carta.codigo} ya está {carta.estado} y no permite modificaciones.")
+        return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+    nuevo_estado = (request.POST.get("estado") or carta.estado).strip()
+    if nuevo_estado not in {"En proceso", "Aprobada", "Finalizada", "No aplica"}:
+        nuevo_estado = carta.estado
+    if not es_supervisor and nuevo_estado == "Aprobada":
+        messages.error(request, "Solo un Supervisor puede marcar una carta como Aprobada.")
+        return redirect(f"{reverse('principal:agenda')}?tab=cartas")
+
+    carta.numero_carta = (request.POST.get("numero_carta") or "").strip()
+    carta.para = (request.POST.get("para") or carta.para).strip()
+    carta.telefono = (request.POST.get("telefono") or "").strip()
+    carta.actividad_tema = (request.POST.get("actividad_tema") or carta.actividad_tema).strip()
+    carta.fecha_actividad = (request.POST.get("fecha_actividad") or "").strip()
+    carta.encargado_area = (request.POST.get("encargado_area") or "").strip()
+    carta.estado = nuevo_estado
+    carta.pronuncia = (request.POST.get("pronuncia") or carta.pronuncia).strip()
+    carta.derivada_a = (request.POST.get("derivada_a") or "").strip()
+    carta.observacion = (request.POST.get("observacion") or "").strip()
+    carta.save()
+
+    messages.success(request, f"Carta {carta.codigo} actualizada correctamente.")
+    return redirect(f"{reverse('principal:agenda')}?tab=cartas")
 
 
 @requiere_roles("Funcionario", "Administrador")
@@ -888,7 +1173,7 @@ def panel(request):
         fecha__range=(inicio_periodo, fin_periodo),
     ).order_by("fecha_limite", "plazo")[:4]
 
-    # --- FILTRO ESTRICTO POR CARGO DEL USUARIO ---
+
     perfil = getattr(usuario_objetivo, "perfil", None)
     if perfil and perfil.cargo:
         metas_db = Meta.objects.filter(vigente=True, cargo=perfil.cargo)
@@ -1250,7 +1535,7 @@ def editar_caso_social(request):
         messages.success(request, "Gestión actualizada correctamente.")
         return redirect("principal:area_social")
 
-    # Modo agregar_gestion (2ª o 3ª)
+
     if caso.gestiones.count() >= 3:
         messages.error(request, "Límite máximo alcanzado (3 de 3). No se pueden agregar más gestiones.")
         return redirect("principal:area_social")
@@ -1481,7 +1766,7 @@ def asignar_tareas(request):
 
         return redirect("principal:asignar_tareas")
 
-    # --- LISTADO, RESUMEN Y FILTROS (GET) ---
+
     inicio_periodo, fin_periodo = _rango_periodo_activo(request)
     base_qs = (
         Compromiso.objects.filter(fecha__range=(inicio_periodo, fin_periodo))

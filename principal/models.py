@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F, Q
+from django.utils import timezone
 
 
 # =====================================================================
@@ -870,3 +871,113 @@ class GestionSocial(models.Model):
         if not ((self.caso.usuario_nombre or "").strip() and (self.caso.telefono or "").strip()):
             return 0
         return 1
+
+    # =====================================================================
+# 6. TUBO DE CARTAS 
+# =====================================================================
+
+class CartaOficinaPartes(models.Model):
+    PARA_CHOICES = [
+        ("Alcaldesa", "Alcaldesa"),
+        ("Delegado/a", "Delegado/a"),
+        ("Dirección Municipal", "Dirección Municipal"),
+        ("Otro", "Otro"),
+    ]
+    ESTADOS_CARTA = [
+        ("En proceso", "En proceso"),
+        ("Aprobada", "Aprobada"),
+        ("Finalizada", "Finalizada"),
+        ("No aplica", "No aplica"),
+    ]
+    PRONUNCIA_CHOICES = [
+        ("No aplica", "No aplica"),
+        ("Delegado", "Delegado"),
+        ("Alcaldesa", "Alcaldesa"),
+        ("Gabinete", "Gabinete"),
+        ("Otro", "Otro"),
+    ]
+
+    codigo = models.CharField(max_length=20, unique=True, db_index=True, verbose_name="Código interno")
+    numero_carta = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="N° Oficina de Partes",
+    )
+    delegacion = models.ForeignKey(
+        Delegacion,
+        on_delete=models.PROTECT,
+        related_name="cartas",
+    )
+    trimestre = models.ForeignKey(
+        Trimestre,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cartas",
+    )
+    fecha_ingreso = models.DateField(default=timezone.localdate, db_index=True, verbose_name="Fecha")
+    para = models.CharField(max_length=40, choices=PARA_CHOICES, default="Alcaldesa", verbose_name="Para")
+    vecino = models.ForeignKey(
+        Vecino,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cartas",
+    )
+    rut_remitente = models.CharField(max_length=15, blank=True, default="", db_index=True, verbose_name="RUT Remitente")
+    remitente = models.CharField(max_length=150, db_index=True, verbose_name="Remite")
+    telefono = models.CharField(max_length=30, blank=True, default="", verbose_name="Fono")
+    actividad_tema = models.TextField(verbose_name="Actividad o Tema")
+    fecha_actividad = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        verbose_name="Fecha de actividad / plazo",
+    )
+    encargado_area = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Encargado / Unidad",
+    )
+    responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="cartas_asignadas",
+        verbose_name="Funcionario responsable",
+    )
+    estado = models.CharField(max_length=20, choices=ESTADOS_CARTA, default="En proceso", db_index=True)
+    pronuncia = models.CharField(max_length=40, choices=PRONUNCIA_CHOICES, default="No aplica", verbose_name="Se pronuncia")
+    derivada_a = models.CharField(max_length=100, blank=True, default="", verbose_name="Derivada a")
+    observacion = models.TextField(blank=True, default="", verbose_name="Observación")
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="cartas_creadas",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "carta oficina de partes"
+        verbose_name_plural = "cartas oficina de partes"
+        ordering = ["-fecha_ingreso", "-id"]
+        indexes = [
+            models.Index(fields=["delegacion", "estado"], name="idx_carta_deleg_estado"),
+            models.Index(fields=["responsable", "estado"], name="idx_carta_resp_estado"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.codigo:
+            self.codigo = f"CAR-{uuid.uuid4().hex[:5].upper()}"
+        super().save(*args, **kwargs)
+
+    @property
+    def esta_bloqueada(self):
+        return self.estado in ("Aprobada", "Finalizada")
+
+    def __str__(self):
+        num = f"N° {self.numero_carta}" if self.numero_carta else self.codigo
+        return f"{num} - {self.remitente}"

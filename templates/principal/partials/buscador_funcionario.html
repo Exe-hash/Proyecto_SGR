@@ -1,0 +1,95 @@
+{% if puede_inspeccionar_funcionarios %}
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label for="buscadorFuncionarioTexto" class="form-label fw-semibold small mb-1">
+          Buscar funcionario
+        </label>
+        <input
+          type="search"
+          id="buscadorFuncionarioTexto"
+          class="form-control form-control-sm"
+          placeholder="Escribe nombre, apellido o usuario..."
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="col-md-5">
+        <label for="buscadorFuncionarioSelect" class="form-label fw-semibold small mb-1">
+          Funcionario seleccionado
+        </label>
+        <select
+          id="buscadorFuncionarioSelect"
+          name="funcionario"
+          class="form-select form-select-sm"
+          onchange="this.form.submit()"
+        >
+          <option value="propio" {% if not viendo_otro_usuario %}selected{% endif %}>
+            Mi propia vista ({{ request.user.get_full_name|default:request.user.username }})
+          </option>
+          {% for f in funcionarios_buscador %}
+          <option value="{{ f.id }}" {% if usuario_objetivo.id == f.id %}selected{% endif %}>
+            {{ f.get_full_name|default:f.username }} ({{ f.username }}){% if f.perfil and f.perfil.cargo %} — {{ f.perfil.cargo.nombre }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-danger fw-semibold flex-grow-1">
+          Ver datos
+        </button>
+        {% if viendo_otro_usuario %}
+        <a href="?funcionario=propio" class="btn btn-sm btn-outline-secondary">
+          Mi vista
+        </a>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if viendo_otro_usuario %}
+    <div class="mt-2 small text-muted">
+      Consultando registros de:
+      <strong class="text-dark">
+        {{ usuario_objetivo.get_full_name|default:usuario_objetivo.username }}
+      </strong>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var input = document.getElementById("buscadorFuncionarioTexto");
+  var select = document.getElementById("buscadorFuncionarioSelect");
+  if (!input || !select) return;
+
+  var opcionesOriginales = Array.from(select.options).map(function (opt) {
+    return { value: opt.value, text: opt.text };
+  });
+
+  input.addEventListener("input", function () {
+    var termino = input.value.trim().toLowerCase();
+    var valorActual = select.value;
+    select.innerHTML = "";
+
+    var coincidencias = opcionesOriginales.filter(function (opt) {
+      return opt.value === "propio" || opt.text.toLowerCase().includes(termino);
+    });
+
+    coincidencias.forEach(function (opt) {
+      var el = document.createElement("option");
+      el.value = opt.value;
+      el.textContent = opt.text;
+      if (opt.value === valorActual) el.selected = true;
+      select.appendChild(el);
+    });
+
+    if (termino && coincidencias.length > 1) {
+      select.value = coincidencias[1].value;
+    }
+  });
+});
+</script>
+{% endif %}
