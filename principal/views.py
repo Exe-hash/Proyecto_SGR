@@ -55,6 +55,15 @@ from .reglas import (
 from django.urls import reverse, reverse_lazy
 from .models import CartaOficinaPartes
 
+from decimal import Decimal, InvalidOperation
+from .metricas import (
+    calcular_resumen_equipo,
+    calcular_resumen_funcionario,
+    enviar_notificacion_ajuste,
+    resolver_trimestre_periodo,
+)
+from .models import Ausencia, Trimestre
+
 def usuario_tiene_rol(usuario, *roles):
     """Indica si un usuario posee al menos uno de los roles solicitados."""
     return (
@@ -113,14 +122,13 @@ def _rango_periodo_activo(request):
 
 def _resolver_usuario_objetivo(request):
     """
-    Permite a Administrador y Supervisor consultar el panel o las evidencias
-    de cualquier funcionario y mantener la selección al cambiar de vista o trimestre.
+    Permite a Administrador inspeccionar cualquier funcionario y a Supervisor
+    inspeccionar funcionarios de su delegación desde Mi Panel / Mis Evidencias.
     """
-    puede_inspeccionar = (
-        request.user.is_superuser
-        or usuario_tiene_rol(request.user, "Administrador")
-    )
-    if not puede_inspeccionar:
+    es_admin = request.user.is_superuser or usuario_tiene_rol(request.user, "Administrador")
+    es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
+
+    if not (es_admin or es_supervisor):
         return request.user, {
             "puede_inspeccionar_funcionarios": False,
             "funcionarios_buscador": [],
@@ -130,10 +138,14 @@ def _resolver_usuario_objetivo(request):
 
     funcionarios_qs = (
         User.objects.filter(is_active=True, groups__name="Funcionario")
-        .select_related("perfil__cargo")
+        .select_related("perfil__cargo", "perfil__delegacion")
         .order_by("first_name", "last_name", "username")
         .distinct()
     )
+    if es_supervisor and not es_admin:
+        perfil_sup = getattr(request.user, "perfil", None)
+        if perfil_sup and perfil_sup.delegacion_id:
+            funcionarios_qs = funcionarios_qs.filter(perfil__delegacion_id=perfil_sup.delegacion_id)
 
     param = request.GET.get("funcionario")
     if param == "propio":
@@ -169,11 +181,14 @@ def renderizar(request, plantilla, contexto=None):
     )
 
 def destino_por_rol(usuario):
-    """Devuelve la ruta de la página principal según el rol del usuario."""
+    """Devuelve la ruta de la página principal según el rol y cargo del usuario."""
     if usuario_tiene_rol(usuario, "Administrador"):
         return "principal:administracion"
     if usuario_tiene_rol(usuario, "Supervisor"):
         return "principal:equipo"
+    perfil = getattr(usuario, "perfil", None)
+    if perfil and perfil.cargo and "social" in perfil.cargo.nombre.lower():
+        return "principal:area_social"
     return "principal:panel"
 
 
@@ -194,18 +209,14 @@ def inicio(request):
 
         if usuario is not None:
             login(request, usuario)
-            
-            if usuario_tiene_rol(usuario, "Administrador"):
-                return redirect("principal:administracion")
-            elif usuario_tiene_rol(usuario, "Supervisor"):
-                return redirect("principal:equipo")
-            else:
-                
-                if hasattr(usuario, 'perfil') and usuario.perfil.cargo and 'social' in usuario.perfil.cargo.nombre.lower():
-                    return redirect("principal:area_social")
-                
-                
-                return redirect("principal:panel")
+            perfil = getattr(usuario, "perfil", None)
+            if perfil and perfil.debe_cambiar_clave:
+                messages.warning(
+                    request,
+                    "Ingresaste con una contraseña temporal. Debes actualizarla para continuar.",
+                )
+                return redirect("principal:cambiar_password_inicial")
+            return redirect(destino_por_rol(usuario))
 
         return render(
             request,
@@ -845,54 +856,62 @@ def evidencias(request):
 @requiere_roles("Supervisor", "Administrador")
 def equipo(request):
     inicio_periodo, fin_periodo = _rango_periodo_activo(request)
-    todas_evidencias = Evidencia.objects.filter(
-        fecha_registro__range=(inicio_periodo, fin_periodo)
+    es_admin = request.user.is_superuser or usuario_tiene_rol(request.user, "Administrador")
+    perfil_actual = getattr(request.user, "perfil", None)
+
+    delegacion_obj = None
+    filtro_deleg = (request.GET.get("delegacion_id") or "").strip()
+    if es_admin:
+        if filtro_deleg.isdigit():
+            delegacion_obj = Delegacion.objects.filter(pk=int(filtro_deleg), activa=True).first()
+    elif perfil_actual and perfil_actual.delegacion:
+        delegacion_obj = perfil_actual.delegacion
+
+    funcionarios_qs = (
+        User.objects.filter(is_active=True, groups__name="Funcionario")
+        .select_related("perfil__cargo", "perfil__delegacion")
+        .order_by("first_name", "last_name", "username")
+        .distinct()
     )
-    total_aprobadas = todas_evidencias.filter(estado="Aprobada").count()
-    total_revision = todas_evidencias.filter(estado="En revisión").count()
-    total_general = todas_evidencias.count()
+    if delegacion_obj:
+        funcionarios_qs = funcionarios_qs.filter(perfil__delegacion=delegacion_obj)
 
-    avance_global = int((total_aprobadas / total_general * 100)) if total_general > 0 else 0
+    resumen = calcular_resumen_equipo(
+        funcionarios_qs=funcionarios_qs,
+        inicio_periodo=inicio_periodo,
+        fin_periodo=fin_periodo,
+        delegacion=delegacion_obj,
+    )
 
-    funcionarios_db = User.objects.filter(groups__name="Funcionario").select_related("perfil__cargo")
-    equipo_calculado = []
+    trimestre_activo = resolver_trimestre_periodo(inicio_periodo, fin_periodo)
+    trimestres_disponibles = Trimestre.objects.all().order_by("-fecha_inicio")
 
-    for f in funcionarios_db:
-        evs = todas_evidencias.filter(funcionario=f)
-        aprob = evs.filter(estado="Aprobada").count()
-        tot = evs.count()
-        porcentaje = int((aprob / tot * 100)) if tot > 0 else 0
+    ajustes_recientes_qs = AjusteDesempeno.objects.select_related(
+        "funcionario", "trimestre", "registrado_por"
+    ).order_by("-fecha_registro")
+    ausencias_recientes_qs = Ausencia.objects.select_related(
+        "funcionario", "trimestre", "registrado_por"
+    ).order_by("-fecha_inicio")
 
-        clase = "aprobada" if porcentaje >= 60 else ("corregir" if porcentaje >= 40 else "rechazada")
-        estado = "Óptimo" if porcentaje >= 60 else ("En riesgo" if porcentaje >= 40 else "Crítico")
-
-        iniciales = f"{f.first_name[:1]}{f.last_name[:1]}" if f.first_name else (f.username[:2] or "F")
-        cargo_real = (
-            f.perfil.cargo.nombre
-            if hasattr(f, "perfil") and f.perfil.cargo
-            else "Sin cargo"
-        )
-
-        equipo_calculado.append({
-            "nombre": f.get_full_name() or f.username,
-            "iniciales": iniciales.upper(),
-            "cargo": cargo_real,
-            "porcentaje": porcentaje,
-            "barra": porcentaje,
-            "clase": clase,
-            "estado": estado,
-        })
+    if delegacion_obj:
+        ajustes_recientes_qs = ajustes_recientes_qs.filter(funcionario__perfil__delegacion=delegacion_obj)
+        ausencias_recientes_qs = ausencias_recientes_qs.filter(funcionario__perfil__delegacion=delegacion_obj)
 
     return renderizar(
         request,
         "principal/equipo.html",
         {
             "pagina": "equipo",
-            "avance_global": avance_global,
-            "total_aprobadas": total_aprobadas,
-            "total_revision": total_revision,
-            "total_general": total_general,
-            "equipo": equipo_calculado,
+            **resumen,
+            "es_admin_equipo": es_admin,
+            "delegaciones": Delegacion.objects.filter(activa=True),
+            "delegacion_seleccionada": delegacion_obj,
+            "filtro_deleg": str(delegacion_obj.id) if delegacion_obj else "",
+            "funcionarios_delegacion": funcionarios_qs,
+            "trimestre_activo": trimestre_activo,
+            "trimestres_disponibles": trimestres_disponibles,
+            "ajustes_recientes": ajustes_recientes_qs[:8],
+            "ausencias_recientes": ausencias_recientes_qs[:8],
         },
     )
 
@@ -1153,64 +1172,18 @@ def desactivar_usuario(request, usuario_id):
 
 
 
-@requiere_roles("Funcionario", "Supervisor")
+@requiere_roles("Funcionario", "Supervisor", "Administrador")
 def panel(request):
     inicio_periodo, fin_periodo = _rango_periodo_activo(request)
     usuario_objetivo, ctx_buscador = _resolver_usuario_objetivo(request)
-
-    mis_evidencias = Evidencia.objects.filter(
-        funcionario=usuario_objetivo,
-        fecha_registro__range=(inicio_periodo, fin_periodo),
-    )
-    ev_aprobadas = mis_evidencias.filter(estado="Aprobada").count()
-    ev_revision = mis_evidencias.filter(estado="En revisión").count()
-    ev_rechazadas = mis_evidencias.filter(estado="Rechazada").count()
-
-    total_ev = mis_evidencias.count()
-    porcentaje_avance = int((ev_aprobadas / total_ev * 100)) if total_ev > 0 else 0
-    compromisos_vencer = Compromiso.objects.filter(
-        responsable=usuario_objetivo,
-        fecha__range=(inicio_periodo, fin_periodo),
-    ).order_by("fecha_limite", "plazo")[:4]
-
-
-    perfil = getattr(usuario_objetivo, "perfil", None)
-    if perfil and perfil.cargo:
-        metas_db = Meta.objects.filter(vigente=True, cargo=perfil.cargo)
-    else:
-        metas_db = Meta.objects.none()
-
-    metas_calculadas = []
-    for m in metas_db:
-        avance_real = mis_evidencias.filter(meta_relacionada=m, estado="Aprobada").count()
-
-        cumplimiento = (avance_real / m.valor_objetivo * 100) if m.valor_objetivo > 0 else 0
-        if cumplimiento > 120:
-            cumplimiento = 120
-
-        resultado = (m.ponderacion * cumplimiento) / 100
-
-        metas_calculadas.append({
-            "id": m.id,
-            "nombre": m.nombre,
-            "ponderacion": m.ponderacion,
-            "avance": avance_real,
-            "meta": m.valor_objetivo,
-            "barra": min(int(cumplimiento), 100),
-            "resultado": round(resultado, 1),
-        })
+    resumen = calcular_resumen_funcionario(usuario_objetivo, inicio_periodo, fin_periodo)
 
     return renderizar(
         request,
         "principal/panel.html",
         {
             "pagina": "panel",
-            "ev_aprobadas": ev_aprobadas,
-            "ev_revision": ev_revision,
-            "ev_rechazadas": ev_rechazadas,
-            "porcentaje_avance": porcentaje_avance,
-            "compromisos_vencer": compromisos_vencer,
-            "metas": metas_calculadas,
+            **resumen,
             **ctx_buscador,
         },
     )
@@ -1596,7 +1569,7 @@ def cambiar_password_inicial(request):
                 perfil.debe_cambiar_clave = False
                 perfil.save(update_fields=["debe_cambiar_clave"])
             messages.success(request, "Contraseña actualizada correctamente.")
-            return redirect("principal:panel")
+            return redirect(destino_por_rol(usuario))
     else:
         form = PasswordChangeForm(request.user)
 
@@ -1855,3 +1828,151 @@ def asignar_tareas(request):
             "territorios": Territorio.objects.all().order_by("nombre"),
         },
     )
+
+@requiere_roles("Supervisor", "Administrador")
+@transaction.atomic
+def registrar_ajuste_desempeno(request):
+    """Registra una Felicitación (con respaldo obligatorio) o Reclamo y notifica por correo al funcionario."""
+    if request.method != "POST":
+        return redirect("principal:equipo")
+
+    funcionario_id = (request.POST.get("funcionario_id") or "").strip()
+    trimestre_id = (request.POST.get("trimestre_id") or "").strip()
+    tipo = (request.POST.get("tipo") or "").strip()
+    porcentaje_str = (request.POST.get("porcentaje_ajuste") or "").strip().replace(",", ".")
+    motivo = (request.POST.get("motivo") or "").strip()
+    archivo = request.FILES.get("archivo_respaldo")
+
+    if tipo not in ("Felicitación", "Penalización"):
+        messages.error(request, "Tipo de ajuste inválido.")
+        return redirect("principal:equipo")
+
+    if not (funcionario_id.isdigit() and motivo and porcentaje_str):
+        messages.error(request, "Completa funcionario, porcentaje y motivo.")
+        return redirect("principal:equipo")
+
+    funcionario = get_object_or_404(User, pk=int(funcionario_id), is_active=True)
+
+    # Control de delegación para supervisores
+    es_admin = request.user.is_superuser or usuario_tiene_rol(request.user, "Administrador")
+    if not es_admin:
+        p_sup = getattr(request.user, "perfil", None)
+        p_fun = getattr(funcionario, "perfil", None)
+        if p_sup and p_fun and p_sup.delegacion_id != p_fun.delegacion_id:
+            raise PermissionDenied("Solo puedes registrar ajustes a funcionarios de tu delegación.")
+
+    # Regla del cliente: felicitaciones solo válidas con respaldo formal del delegado
+    if tipo == "Felicitación" and not archivo:
+        messages.error(
+            request,
+            "Las felicitaciones requieren adjuntar el respaldo formal (correo/oficio del Delegado) para ser válidas.",
+        )
+        return redirect("principal:equipo")
+
+    if archivo:
+        try:
+            _validar_archivo_subido(archivo, {".jpg", ".jpeg", ".png", ".pdf"})
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+            return redirect("principal:equipo")
+
+    try:
+        valor = abs(Decimal(porcentaje_str))
+    except InvalidOperation:
+        messages.error(request, "El porcentaje de ajuste debe ser un número válido.")
+        return redirect("principal:equipo")
+
+    if valor <= 0 or valor > Decimal("50"):
+        messages.error(request, "El porcentaje debe estar entre 0.5% y 50%.")
+        return redirect("principal:equipo")
+
+    porcentaje_final = valor if tipo == "Felicitación" else -valor
+
+    trimestre = Trimestre.objects.filter(pk=trimestre_id).first() if trimestre_id.isdigit() else None
+    if not trimestre:
+        inicio_p, fin_p = _rango_periodo_activo(request)
+        trimestre = resolver_trimestre_periodo(inicio_p, fin_p) or Trimestre.objects.order_by("-fecha_inicio").first()
+    if not trimestre:
+        messages.error(request, "No existe un trimestre configurado en el sistema.")
+        return redirect("principal:equipo")
+
+    ajuste = AjusteDesempeno.objects.create(
+        funcionario=funcionario,
+        trimestre=trimestre,
+        tipo=tipo,
+        porcentaje_ajuste=porcentaje_final,
+        motivo=motivo,
+        archivo_respaldo=archivo,
+        registrado_por=request.user,
+    )
+
+    _, msg_correo = enviar_notificacion_ajuste(ajuste)
+    messages.success(
+        request,
+        f"{tipo} ({porcentaje_final:+}%) registrada para {funcionario.get_full_name() or funcionario.username}. {msg_correo}",
+    )
+    return redirect("principal:equipo")
+
+
+@requiere_roles("Supervisor", "Administrador")
+@transaction.atomic
+def registrar_ausencia(request):
+    """Registra una ausencia informada por el Delegado/Supervisor para ajustar las metas del semáforo."""
+    if request.method != "POST":
+        return redirect("principal:equipo")
+
+    funcionario_id = (request.POST.get("funcionario_id") or "").strip()
+    trimestre_id = (request.POST.get("trimestre_id") or "").strip()
+    tipo_ausencia = (request.POST.get("tipo_ausencia") or "").strip()
+    f_ini_str = (request.POST.get("fecha_inicio") or "").strip()
+    f_fin_str = (request.POST.get("fecha_termino") or "").strip()
+    dias_str = (request.POST.get("dias_descontados") or "").strip()
+    observacion = (request.POST.get("observacion") or "").strip()
+
+    if not (funcionario_id.isdigit() and tipo_ausencia and f_ini_str and f_fin_str):
+        messages.error(request, "Completa todos los campos obligatorios de la ausencia.")
+        return redirect("principal:equipo")
+
+    try:
+        f_ini = date.fromisoformat(f_ini_str)
+        f_fin = date.fromisoformat(f_fin_str)
+    except ValueError:
+        messages.error(request, "Las fechas de la ausencia no tienen un formato válido.")
+        return redirect("principal:equipo")
+
+    if f_fin < f_ini:
+        messages.error(request, "La fecha de término no puede ser anterior a la fecha de inicio.")
+        return redirect("principal:equipo")
+
+    dias = int(dias_str) if dias_str.isdigit() and int(dias_str) > 0 else ((f_fin - f_ini).days + 1)
+
+    funcionario = get_object_or_404(User, pk=int(funcionario_id), is_active=True)
+    es_admin = request.user.is_superuser or usuario_tiene_rol(request.user, "Administrador")
+    if not es_admin:
+        p_sup = getattr(request.user, "perfil", None)
+        p_fun = getattr(funcionario, "perfil", None)
+        if p_sup and p_fun and p_sup.delegacion_id != p_fun.delegacion_id:
+            raise PermissionDenied("Solo puedes registrar ausencias a funcionarios de tu delegación.")
+
+    trimestre = Trimestre.objects.filter(pk=trimestre_id).first() if trimestre_id.isdigit() else None
+    if not trimestre:
+        trimestre = resolver_trimestre_periodo(f_ini, f_fin) or Trimestre.objects.order_by("-fecha_inicio").first()
+    if not trimestre:
+        messages.error(request, "No existe un trimestre configurado en el sistema.")
+        return redirect("principal:equipo")
+
+    Ausencia.objects.create(
+        funcionario=funcionario,
+        trimestre=trimestre,
+        tipo_ausencia=tipo_ausencia,
+        fecha_inicio=f_ini,
+        fecha_termino=f_fin,
+        dias_descontados=dias,
+        observacion=observacion,
+        registrado_por=request.user,
+    )
+    messages.success(
+        request,
+        f"Ausencia ({dias} día/s) registrada para {funcionario.get_full_name() or funcionario.username}. Metas del semáforo ajustadas.",
+    )
+    return redirect("principal:equipo")

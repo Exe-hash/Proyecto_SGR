@@ -4,44 +4,53 @@
 {% block content %}
 {% include "principal/partials/buscador_funcionario.html" %}
 <div class="container-fluid px-0">
-  <h1 class="mb-4">Mi Panel Operativo</h1>
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+    <div>
+      <h1 class="mb-1">Mi Panel Operativo</h1>
+      <p class="text-muted mb-0">
+        {% if viendo_otro_usuario %}
+          Inspeccionando a <strong>{{ usuario_objetivo.get_full_name|default:usuario_objetivo.username }}</strong> ·
+        {% endif %}
+        Meta mínima del cargo: <strong>{{ meta_minima }}%</strong> · Tope máximo: <strong>{{ tope_global }}%</strong>
+      </p>
+    </div>
+    {% if dias_ausencia > 0 %}
+      <span class="badge bg-info text-dark px-3 py-2">
+        Ausencias informadas: {{ dias_ausencia }} día(s) · Días efectivos: {{ dias_efectivos }} / {{ dias_computables }}
+      </span>
+    {% endif %}
+  </div>
 
+  <!-- KPIs principales -->
   <div class="row g-4 mb-4">
     <div class="col-md-4">
       <div class="card shadow-sm border-0 rounded-4 h-100 p-3">
-        <h6 class="text-uppercase fw-bold text-muted mb-3">Estado de cumplimiento</h6>
+        <h6 class="text-uppercase fw-bold text-muted mb-3">Semáforo de cumplimiento</h6>
         <div class="text-center mb-3">
           <h2 class="display-4 fw-bold mb-0">{{ porcentaje_avance }}%</h2>
-          
-          {% if porcentaje_avance < 50 %}
-            <span class="badge bg-danger rounded-pill px-3 py-2 mt-2">Estado Crítico</span>
-          {% elif porcentaje_avance < 80 %}
-            <span class="badge bg-warning text-dark rounded-pill px-3 py-2 mt-2">En Riesgo</span>
-          {% else %}
-            <span class="badge bg-success rounded-pill px-3 py-2 mt-2">Óptimo</span>
-          {% endif %}
+          <span class="badge {{ semaforo.badge }} rounded-pill px-3 py-2 mt-2">{{ semaforo.estado }}</span>
         </div>
-        
+
         <div class="d-flex justify-content-between small fw-bold mb-1">
-          <span>Meta: <span class="text-primary">60%</span></span>
-          <span>Avance: {{ porcentaje_avance }}%</span>
+          <span>Meta mínima: <span class="text-primary">{{ meta_minima }}%</span></span>
+          <span>Puntaje metas: {{ puntaje_metas }}%</span>
         </div>
         <div class="progress" style="height: 10px;">
-          <div class="progress-bar {% if porcentaje_avance < 50 %}bg-danger{% elif porcentaje_avance < 80 %}bg-warning{% else %}bg-success{% endif %}" role="progressbar" style="width: {{ porcentaje_avance }}%;" aria-valuenow="{{ porcentaje_avance }}" aria-valuemin="0" aria-valuemax="100"></div>
+          <div class="progress-bar {{ semaforo.bar }}" role="progressbar" style="width: {{ barra_avance }}%;" aria-valuenow="{{ barra_avance }}" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
       </div>
     </div>
 
     <div class="col-md-4">
       <div class="card shadow-sm border-0 rounded-4 h-100 p-3">
-        <h6 class="text-uppercase fw-bold text-muted mb-3">Mis Evidencias</h6>
+        <h6 class="text-uppercase fw-bold text-muted mb-3">Mis Evidencias ({{ ev_totales }})</h6>
         <div class="d-flex flex-column gap-2">
           <a href="{% url 'principal:evidencias' %}" class="btn btn-light d-flex justify-content-between align-items-center border-success border-start border-4">
-            <span class="text-success fw-bold">Aprobadas</span>
+            <span class="text-success fw-bold">Aprobadas ({{ ev_puntaje_valido }} con puntaje)</span>
             <span class="badge bg-success rounded-pill">{{ ev_aprobadas }}</span>
           </a>
           <a href="{% url 'principal:evidencias' %}" class="btn btn-light d-flex justify-content-between align-items-center border-warning border-start border-4">
-            <span class="text-warning fw-bold">En revisión</span>
+            <span class="text-warning fw-bold">Pendientes / Antecedentes</span>
             <span class="badge bg-warning text-dark rounded-pill">{{ ev_revision }}</span>
           </a>
           <a href="{% url 'principal:evidencias' %}" class="btn btn-light d-flex justify-content-between align-items-center border-danger border-start border-4">
@@ -54,56 +63,106 @@
 
     <div class="col-md-4">
       <div class="card shadow-sm border-0 rounded-4 h-100 p-3">
-        <h6 class="text-uppercase fw-bold text-muted mb-3">Ajustes de Desempeño</h6>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="text-uppercase fw-bold text-muted mb-0">Ajustes de Desempeño</h6>
+          {% if ajustes %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#ajustesModal">Ver detalle</button>
+          {% endif %}
+        </div>
         <div class="d-flex flex-column gap-2 h-100">
           <div class="bg-success bg-opacity-10 p-2 rounded text-success h-50 d-flex flex-column justify-content-center">
-            <strong class="small">+1 Felicitación (Junta de vecinos)</strong>
-            <strong class="fs-5">+2.0% pond.</strong>
+            <strong class="small">{{ cant_felicitaciones }} Felicitación(es) con respaldo formal</strong>
+            <strong class="fs-5">+{{ bono_felicitaciones }}% pond.</strong>
+            {% if cant_felicitaciones_sin_respaldo %}
+              <small class="text-muted">({{ cant_felicitaciones_sin_respaldo }} sin respaldo formal no sumada)</small>
+            {% endif %}
           </div>
-          <div class="bg-secondary bg-opacity-10 p-2 rounded text-secondary h-50 d-flex flex-column justify-content-center">
-            <strong class="small">0 Reclamos registrados</strong>
-            <strong class="fs-5">0.0% penalización</strong>
+          <div class="{% if cant_reclamos %}bg-danger bg-opacity-10 text-danger{% else %}bg-secondary bg-opacity-10 text-secondary{% endif %} p-2 rounded h-50 d-flex flex-column justify-content-center">
+            <strong class="small">{{ cant_reclamos }} Reclamo(s) registrado(s)</strong>
+            <strong class="fs-5">{{ penalizacion_reclamos }}% penalización</strong>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-4 mb-4">
-    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom">
-      <h5 class="mb-0 fw-bold">Desglose de metas asignadas al cargo</h5>
-      <div class="d-flex gap-2 mt-2 mt-md-0">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#formulaModal">Ver fórmula</button>
-        <input type="search" class="form-control form-control-sm w-auto" placeholder="Buscar..." data-filter-input="metas">
+  <!-- Gráficos del Panel Operativo -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Cumplimiento por Meta (% · tope {{ tope_global }}%)</h6>
+        <div style="height: 230px;"><canvas id="chartPanelMetas"></canvas></div>
       </div>
     </div>
-    
+    <div class="col-lg-4">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Tendencia de Actividad del Período</h6>
+        <div style="height: 230px;"><canvas id="chartPanelTendencia"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-3">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Estado de Compromisos</h6>
+        <div style="height: 230px;"><canvas id="chartPanelCompromisos"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla de Metas -->
+  <div class="card shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom">
+      <div>
+        <h5 class="mb-0 fw-bold">Desglose de metas asignadas</h5>
+        <small class="text-muted">
+          {% if usa_asignaciones %}Basado en asignaciones trimestrales individuales{% else %}Basado en catálogo general del cargo{% endif %}
+          · Solo cuentan registros aprobados con puntaje válido.
+        </small>
+      </div>
+      <div class="d-flex gap-2 mt-2 mt-md-0">
+        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#formulaModal">Ver fórmula</button>
+        <input type="search" class="form-control form-control-sm w-auto" placeholder="Buscar meta..." data-filter-input="metas">
+      </div>
+    </div>
+
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light text-secondary">
           <tr>
-            <th class="ps-4">Id</th>
+            <th class="ps-4">Código</th>
             <th>Ítem</th>
             <th>Ponderado</th>
             <th>Avance / Meta</th>
             <th>Cumplimiento</th>
+            <th>Aporte final</th>
             <th class="text-end pe-4">Acción</th>
           </tr>
         </thead>
         <tbody>
           {% for meta in metas %}
           <tr data-filter-item="metas">
-            <td class="ps-4">{{ meta.id }}</td>
+            <td class="ps-4 fw-bold text-muted">{{ meta.id }}</td>
             <td class="fw-bold">{{ meta.nombre }}</td>
             <td>{{ meta.ponderacion }}%</td>
-            <td>
-              <div class="progress mb-1" style="height: 5px;">
+            <td style="min-width: 170px;">
+              <div class="progress mb-1" style="height: 6px;">
                 <div class="progress-bar bg-primary" role="progressbar" style="width: {{ meta.barra }}%;"></div>
               </div>
-              <small>{{ meta.avance }} / {{ meta.meta }}</small>
+              <small>
+                {{ meta.avance }} / {{ meta.meta }}
+                {% if meta.ajustada_por_ausencia %}
+                  <span class="text-info">(orig: {{ meta.meta_original }})</span>
+                {% endif %}
+              </small>
             </td>
+            <td><span class="badge bg-light text-dark border">{{ meta.cumplimiento }}%</span></td>
             <td><strong>{{ meta.resultado }}%</strong></td>
-            <td class="text-end pe-4"><button type="button" class="btn btn-sm btn-light">Ver registros</button></td>
+            <td class="text-end pe-4">
+              <a href="{% url 'principal:evidencias' %}" class="btn btn-sm btn-light border">Ver registros</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center p-4 text-muted">No hay metas asignadas para este período.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -111,43 +170,138 @@
     </div>
   </div>
 
-  <h5 class="fw-bold mb-3 mt-4">Actividades asignadas por vencer</h5>
+  <!-- Compromisos por vencer -->
+  <h5 class="fw-bold mb-3 mt-4">Compromisos pendientes asignados</h5>
   <div class="row g-3">
     {% for compromiso in compromisos_vencer %}
     <div class="col-md-4">
       <div class="card shadow-sm border-0 rounded-4 h-100">
         <div class="card-body d-flex flex-column">
-          <div class="d-flex justify-content-between mb-2">
-            <strong class="text-truncate" style="max-width: 70%;">{{ compromiso.titulo }}</strong>
-            <span class="badge {% if compromiso.estado == 'En proceso' %}bg-warning text-dark{% elif compromiso.estado == 'Atrasado' %}bg-danger{% else %}bg-primary{% endif %}">
-              {{ compromiso.plazo|date:"d/m/Y" }}
+          <div class="d-flex justify-content-between mb-2 gap-2">
+            <strong class="text-truncate">{{ compromiso.codigo }} · {{ compromiso.titulo }}</strong>
+            <span class="badge {% if compromiso.estado == 'En proceso' %}bg-warning text-dark{% elif compromiso.estado == 'Vencido' %}bg-danger{% else %}bg-primary{% endif %} text-nowrap">
+              {% if compromiso.fecha_limite %}{{ compromiso.fecha_limite|date:"d/m/Y" }}{% else %}{{ compromiso.plazo }}{% endif %}
             </span>
           </div>
-          <p class="text-muted small mb-3">Territorio: {{ compromiso.territorio }}</p>
-          <a href="{% url 'principal:actividades' %}" class="btn btn-danger btn-sm mt-auto w-100" style="background-color: #ad0007;">✚ Reportar evidencia</a>
+          <p class="text-muted small mb-3">Delegación: {{ compromiso.territorio }} · Estado: {{ compromiso.estado }}</p>
+          <a href="{% url 'principal:agenda' %}" class="btn btn-danger btn-sm mt-auto w-100" style="background-color: #ad0007;">Gestionar en el Tubo</a>
         </div>
       </div>
     </div>
     {% empty %}
     <div class="col-12">
-      <div class="alert alert-light text-center border text-muted">No tienes actividades pendientes por vencer. ¡Excelente trabajo!</div>
+      <div class="alert alert-light text-center border text-muted">No tienes compromisos pendientes por vencer en este período.</div>
     </div>
     {% endfor %}
   </div>
 </div>
 
+<!-- Modal Fórmula -->
 <div class="modal fade" id="formulaModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
+    <div class="modal-content border-0 shadow rounded-4">
       <div class="modal-header">
-        <h5 class="modal-title fw-bold">Fórmula de cálculo</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <h5 class="modal-title fw-bold">Fórmula oficial de evaluación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
-      <div class="modal-body">
-        <p><strong>Cumplimiento</strong> = avance aprobado ÷ meta × 100.</p>
-        <p><strong>Resultado ponderado</strong> = ponderador × cumplimiento ÷ 100.</p>
+      <div class="modal-body small">
+        <p><strong>1. Ajuste por ausencias:</strong> Meta ajustada = Meta exigida × (Días efectivos ÷ {{ dias_computables }}).</p>
+        <p><strong>2. Cumplimiento por ítem:</strong> min(Avance aprobado válido ÷ Meta ajustada × 100, {{ tope_global }}%).</p>
+        <p><strong>3. Resultado ponderado:</strong> Ponderación × Cumplimiento ÷ 100.</p>
+        <p class="mb-0"><strong>4. Semáforo final:</strong> Suma de metas + Felicitaciones con respaldo formal − Reclamos (tope máximo {{ tope_global }}%).</p>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Modal Detalle Ajustes -->
+<div class="modal fade" id="ajustesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Felicitaciones y Reclamos del período</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        {% for a in ajustes %}
+        <div class="border rounded-3 p-3 mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="badge {% if a.tipo == 'Felicitación' %}bg-success{% else %}bg-danger{% endif %}">
+              {{ a.tipo }} ({% if a.porcentaje_ajuste > 0 %}+{% endif %}{{ a.porcentaje_ajuste }}%)
+            </span>
+            <small class="text-muted">{{ a.fecha_registro|date:"d/m/Y H:i" }} · Por {{ a.registrado_por.get_full_name|default:a.registrado_por.username }}</small>
+          </div>
+          <p class="mb-2 small">{{ a.motivo }}</p>
+          {% if a.archivo_respaldo %}
+            <a href="{% url 'principal:descargar_respaldo_ajuste' a.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver respaldo adjunto</a>
+          {% elif a.tipo == 'Felicitación' %}
+            <span class="badge bg-warning text-dark">Sin respaldo formal (no contabiliza)</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ charts|json_script:"panel-charts-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const raw = document.getElementById("panel-charts-data");
+  if (!raw || typeof Chart === "undefined") return;
+  const data = JSON.parse(raw.textContent);
+
+  new Chart(document.getElementById("chartPanelMetas"), {
+    type: "bar",
+    data: {
+      labels: data.metas.labels.length ? data.metas.labels : ["Sin metas"],
+      datasets: [{
+        label: "% Cumplimiento",
+        data: data.metas.values.length ? data.metas.values : [0],
+        backgroundColor: "#ad0007",
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, max: 120 } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  new Chart(document.getElementById("chartPanelTendencia"), {
+    type: "line",
+    data: {
+      labels: data.tendencia.labels,
+      datasets: [
+        { label: "Registradas", data: data.tendencia.registradas, borderColor: "#6c757d", tension: 0.3 },
+        { label: "Aprobadas válidas", data: data.tendencia.aprobadas, borderColor: "#198754", backgroundColor: "rgba(25,135,84,0.12)", fill: true, tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  new Chart(document.getElementById("chartPanelCompromisos"), {
+    type: "doughnut",
+    data: {
+      labels: data.compromisos.labels,
+      datasets: [{
+        data: data.compromisos.values,
+        backgroundColor: ["#ffc107", "#0d6efd", "#198754", "#dc3545"]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+});
+</script>
 {% endblock %}
