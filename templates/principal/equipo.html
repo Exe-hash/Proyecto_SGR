@@ -3,104 +3,472 @@
 
 {% block content %}
 <div class="container-fluid px-0">
-  <h1 class="mb-4">Resumen y Desempeño del Equipo</h1>
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+    <div>
+      <h1 class="mb-1">Resumen y Semáforo del Equipo</h1>
+      <p class="text-muted mb-0">
+        {% if delegacion_seleccionada %}
+          Delegación: <strong>{{ delegacion_seleccionada.nombre }}</strong>
+        {% else %}
+          Vista consolidada de todas las delegaciones
+        {% endif %}
+      </p>
+    </div>
 
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if es_admin_equipo %}
+      <form method="get" class="d-flex gap-2">
+        <select name="delegacion_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todas las delegaciones</option>
+          {% for d in delegaciones %}
+            <option value="{{ d.id }}" {% if filtro_deleg == d.id|stringformat:"s" %}selected{% endif %}>{{ d.nombre }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+
+      <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" data-bs-toggle="modal" data-bs-target="#modalAusencia">
+        ＋ Informar Ausencia
+      </button>
+      <button type="button" class="btn btn-sm btn-danger fw-bold" style="background-color: #ad0007;" data-bs-toggle="modal" data-bs-target="#modalAjuste">
+        ＋ Felicitación / Reclamo
+      </button>
+    </div>
+  </div>
+
+  <!-- Tarjetas KPI -->
   <div class="row g-4 mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
-        <h6 class="text-muted fw-bold mb-3">Evidencias Aprobadas</h6>
-        <h2 class="display-4 fw-bold text-success mb-2">{{ total_aprobadas }}</h2>
-        <span class="badge bg-success bg-opacity-10 text-success align-self-start py-2">Total validadas por jefatura</span>
-      </div>
-    </div>
-    
-    <div class="col-md-4">
-      <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
-        <h6 class="text-muted fw-bold mb-3">Avance Global del Equipo</h6>
-        <div class="text-center my-3">
-          <h2 class="display-4 fw-bold mb-0 text-primary">{{ avance_global }}%</h2>
-          <small class="text-muted">Cumplimiento promedio ponderado</small>
+        <h6 class="text-muted fw-bold mb-2">Semáforo de Delegación</h6>
+        <div class="d-flex align-items-baseline gap-2">
+          <h2 class="display-5 fw-bold mb-0">{{ avance_global }}%</h2>
+          <span class="badge {{ semaforo_global.badge }}">{{ semaforo_global.estado }}</span>
         </div>
-        <div class="progress" style="height: 8px;">
-          <div class="progress-bar bg-primary" role="progressbar" style="width: {{ avance_global }}%;"></div>
+        <div class="progress mt-3" style="height: 8px;">
+          <div class="progress-bar {{ semaforo_global.bar }}" style="width: {{ barra_global }}%;"></div>
         </div>
       </div>
     </div>
-    
-    <div class="col-md-4">
+
+    <div class="col-md-3">
       <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
-        <h6 class="text-muted fw-bold mb-3">Volumen de Actividad</h6>
-        <div class="d-flex justify-content-between align-items-center mt-3">
-          <div class="text-center">
-            <h3 class="fw-bold mb-0 text-dark">{{ total_general }}</h3>
-            <span class="text-muted small">Registradas</span>
+        <h6 class="text-muted fw-bold mb-2">Evidencias Aprobadas</h6>
+        <h2 class="display-5 fw-bold text-success mb-1">{{ total_aprobadas }}</h2>
+        <small class="text-muted">{{ total_puntaje_valido }} con puntaje válido</small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-2">Actividad y Revisión</h6>
+        <div class="d-flex justify-content-between mt-2">
+          <div>
+            <h3 class="fw-bold mb-0">{{ total_general }}</h3>
+            <small class="text-muted">Registradas</small>
           </div>
-          <div class="text-center">
+          <div>
             <h3 class="fw-bold mb-0 text-warning">{{ total_revision }}</h3>
-            <span class="text-muted small">En revisión</span>
+            <small class="text-muted">Pendientes</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
+        <h6 class="text-muted fw-bold mb-2">Tubos del Período</h6>
+        <div class="d-flex justify-content-between mt-2">
+          <div>
+            <h3 class="fw-bold mb-0 text-primary">{{ total_compromisos }}</h3>
+            <small class="text-muted">Compromisos</small>
+          </div>
+          <div>
+            <h3 class="fw-bold mb-0 text-dark">{{ total_cartas }}</h3>
+            <small class="text-muted">Cartas</small>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-4 mb-4">
-    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom">
-      <h5 class="mb-0 fw-bold">Estado del Equipo <span class="text-muted fw-normal fs-6">({% now "d M Y" %})</span></h5>
-      <div class="d-flex gap-2 mt-2 mt-md-0">
-        <input type="search" class="form-control form-control-sm" placeholder="Buscar en equipo..." data-filter-input="equipo">
-        <button class="btn btn-outline-primary btn-sm text-nowrap">Exportar Informe</button>
+  <!-- 4 Gráficos del Dashboard de Equipo -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Semáforo de Cumplimiento por Funcionario (%)</h6>
+        <div style="height: 240px;"><canvas id="chartEquipoSemaforo"></canvas></div>
       </div>
     </div>
-    
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Carga de Trabajo (Registradas vs Aprobadas Válidas)</h6>
+        <div style="height: 240px;"><canvas id="chartEquipoCarga"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Tendencia Mensual de Evidencias</h6>
+        <div style="height: 230px;"><canvas id="chartEquipoTendencia"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Estado de Compromisos en el Tubo</h6>
+        <div style="height: 230px;"><canvas id="chartEquipoCompromisos"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla de Funcionarios -->
+  <div class="card shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom gap-2">
+      <h5 class="mb-0 fw-bold">Detalle por Funcionario <span class="text-muted fw-normal fs-6">({% now "d M Y" %})</span></h5>
+      <div class="d-flex gap-2">
+        <input type="search" class="form-control form-control-sm" placeholder="Buscar funcionario..." data-filtro-tabla="tabla-equipo">
+        <button type="button" id="btn-exportar-csv" class="btn btn-outline-primary btn-sm text-nowrap">Exportar CSV</button>
+      </div>
+    </div>
+
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table id="tabla-equipo" class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
             <th class="ps-4">Funcionario</th>
-            <th>Estado</th>
-            <th>Avance Total</th>
-            <th>Última Actividad</th>
-            <th class="text-end pe-4">Análisis</th>
+            <th>Semáforo</th>
+            <th>Cumplimiento</th>
+            <th>Carga / Válidas</th>
+            <th>Ausencias / Ajustes</th>
+            <th class="text-end pe-4">Detalle</th>
           </tr>
         </thead>
         <tbody>
           {% for p in equipo %}
-          <tr data-filter-item="equipo">
+          <tr>
             <td class="ps-4">
               <div class="d-flex align-items-center gap-3">
-                <div class="bg-secondary bg-opacity-25 rounded-circle d-flex align-items-center justify-content-center fw-bold text-secondary" style="width: 40px; height: 40px;">
+                <div class="bg-secondary bg-opacity-25 rounded-circle d-flex align-items-center justify-content-center fw-bold text-secondary" style="width: 38px; height: 38px;">
                   {{ p.iniciales }}
                 </div>
                 <div>
                   <strong class="d-block">{{ p.nombre }}</strong>
-                  <small class="text-muted">{{ p.cargo }}</small>
+                  <small class="text-muted">{{ p.cargo }} · {{ p.delegacion }}</small>
                 </div>
               </div>
             </td>
-            <td>
-              <span class="badge rounded-pill {% if p.estado == 'Activo' %}bg-success{% else %}bg-secondary{% endif %}">{{ p.estado }}</span>
-            </td>
-            <td>
+            <td><span class="badge rounded-pill {{ p.badge }}">{{ p.estado }}</span></td>
+            <td style="min-width: 170px;">
               <div class="d-flex justify-content-between small mb-1">
-                <span>{{ p.porcentaje }}%</span>
-                <span class="text-muted">/ 60%</span>
+                <strong>{{ p.porcentaje }}%</strong>
+                <span class="text-muted">mín {{ p.meta_minima }}%</span>
               </div>
               <div class="progress" style="height: 6px;">
-                <div class="progress-bar {% if p.porcentaje < 50 %}bg-danger{% elif p.porcentaje < 80 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ p.barra }}%;"></div>
+                <div class="progress-bar {{ p.bar }}" style="width: {{ p.barra }}%;"></div>
               </div>
             </td>
-            <td><small class="text-muted">Registro validado por sistema</small></td>
-            <td class="text-end pe-4"><button class="btn btn-sm btn-light">Ver Perfil</button></td>
+            <td class="small">
+              <strong>{{ p.ev_puntaje_valido }}</strong> válidas / {{ p.carga_total }} total
+            </td>
+            <td class="small">
+              {% if p.dias_ausencia %}<span class="badge bg-info text-dark me-1">{{ p.dias_ausencia }}d aus.</span>{% endif %}
+              {% if p.bono_felicitaciones %}<span class="badge bg-success me-1">+{{ p.bono_felicitaciones }}%</span>{% endif %}
+              {% if p.penalizacion_reclamos %}<span class="badge bg-danger">{{ p.penalizacion_reclamos }}%</span>{% endif %}
+              {% if not p.dias_ausencia and not p.bono_felicitaciones and not p.penalizacion_reclamos %}
+                <span class="text-muted">Sin ajustes</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-4">
+              <a href="{% url 'principal:panel' %}?funcionario={{ p.id }}" class="btn btn-sm btn-outline-primary">Ver Panel</a>
+            </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="text-center p-5 text-muted">Aún no hay funcionarios registrados en el equipo.</td>
+            <td colspan="6" class="text-center p-5 text-muted">No hay funcionarios registrados para el filtro seleccionado.</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+
+  <!-- Historial reciente de Ausencias y Ajustes -->
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Últimas Felicitaciones y Reclamos</h6>
+        {% for a in ajustes_recientes %}
+        <div class="border-bottom py-2 small d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <strong>{{ a.funcionario.get_full_name|default:a.funcionario.username }}</strong>
+            <span class="badge {% if a.tipo == 'Felicitación' %}bg-success{% else %}bg-danger{% endif %} ms-1">
+              {{ a.tipo }} ({% if a.porcentaje_ajuste > 0 %}+{% endif %}{{ a.porcentaje_ajuste }}%)
+            </span>
+            <div class="text-muted">{{ a.motivo|truncatechars:90 }}</div>
+          </div>
+          {% if a.archivo_respaldo %}
+            <a href="{% url 'principal:descargar_respaldo_ajuste' a.id %}" target="_blank" class="btn btn-sm btn-light border text-nowrap">Respaldo</a>
+          {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-muted small mb-0">Aún no se registran felicitaciones ni reclamos.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
+        <h6 class="fw-bold mb-3">Últimas Ausencias Informadas</h6>
+        {% for au in ausencias_recientes %}
+        <div class="border-bottom py-2 small d-flex justify-content-between align-items-center">
+          <div>
+            <strong>{{ au.funcionario.get_full_name|default:au.funcionario.username }}</strong> · {{ au.tipo_ausencia }}
+            <div class="text-muted">{{ au.fecha_inicio|date:"d/m/Y" }} al {{ au.fecha_termino|date:"d/m/Y" }}</div>
+          </div>
+          <span class="badge bg-info text-dark">{{ au.dias_descontados }} día(s)</span>
+        </div>
+        {% empty %}
+        <p class="text-muted small mb-0">Sin ausencias informadas recientemente.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- Modal Registrar Felicitación / Reclamo -->
+<div class="modal fade" id="modalAjuste" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Registrar Felicitación o Reclamo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'principal:registrar_ajuste_desempeno' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p class="text-muted small">Al guardar, el sistema notificará automáticamente por correo al funcionario y ajustará su semáforo.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Funcionario *</label>
+            <select name="funcionario_id" class="form-select" required>
+              <option value="">-- Seleccione --</option>
+              {% for f in funcionarios_delegacion %}
+                <option value="{{ f.id }}">{{ f.get_full_name|default:f.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Tipo *</label>
+              <select name="tipo" id="ajuste-tipo" class="form-select" required>
+                <option value="Felicitación">Felicitación (+ suma)</option>
+                <option value="Penalización">Reclamo / Penalización (− resta)</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Porcentaje (%) *</label>
+              <input type="number" name="porcentaje_ajuste" class="form-control" step="0.5" min="0.5" max="50" value="2" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Trimestre</label>
+            <select name="trimestre_id" class="form-select">
+              {% for t in trimestres_disponibles %}
+                <option value="{{ t.id }}" {% if trimestre_activo and t.id == trimestre_activo.id %}selected{% endif %}>{{ t.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Motivo / resumen del correo recibido *</label>
+            <textarea name="motivo" class="form-control" rows="3" required></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold" id="ajuste-respaldo-label">Respaldo formal del Delegado (PDF/JPG/PNG) *</label>
+            <input type="file" name="archivo_respaldo" id="ajuste-respaldo-input" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+            <small class="text-muted">Obligatorio para felicitaciones.</small>
+          </div>
+        </div>
+        <div class="modal-footer border-top-0">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger fw-bold" style="background-color: #ad0007;">Guardar y Notificar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Informar Ausencia -->
+<div class="modal fade" id="modalAusencia" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Informar Ausencia de Funcionario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'principal:registrar_ausencia' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Funcionario *</label>
+            <select name="funcionario_id" class="form-select" required>
+              <option value="">-- Seleccione --</option>
+              {% for f in funcionarios_delegacion %}
+                <option value="{{ f.id }}">{{ f.get_full_name|default:f.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Tipo de ausencia *</label>
+              <select name="tipo_ausencia" class="form-select" required>
+                <option value="Licencia Médica">Licencia Médica</option>
+                <option value="Vacaciones">Vacaciones</option>
+                <option value="Día Administrativo">Día Administrativo</option>
+                <option value="Día Libre">Día Libre</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Días hábiles a descontar *</label>
+              <input type="number" name="dias_descontados" class="form-control" min="1" max="60" value="1" required>
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Fecha inicio *</label>
+              <input type="date" name="fecha_inicio" class="form-control" value="{% now 'Y-m-d' %}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Fecha término *</label>
+              <input type="date" name="fecha_termino" class="form-control" value="{% now 'Y-m-d' %}" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Trimestre</label>
+            <select name="trimestre_id" class="form-select">
+              {% for t in trimestres_disponibles %}
+                <option value="{{ t.id }}" {% if trimestre_activo and t.id == trimestre_activo.id %}selected{% endif %}>{{ t.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Observación</label>
+            <textarea name="observacion" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-top-0">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger fw-bold" style="background-color: #ad0007;">Registrar y Ajustar Metas</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{{ charts|json_script:"equipo-charts-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // Alternar obligatoriedad visual del respaldo según tipo
+  const tipoSel = document.getElementById("ajuste-tipo");
+  const respInput = document.getElementById("ajuste-respaldo-input");
+  const respLabel = document.getElementById("ajuste-respaldo-label");
+  if (tipoSel && respInput) {
+    const syncResp = () => {
+      const esFelic = tipoSel.value === "Felicitación";
+      respInput.required = esFelic;
+      respLabel.textContent = esFelic
+        ? "Respaldo formal del Delegado (PDF/JPG/PNG) *"
+        : "Respaldo del reclamo (opcional, PDF/JPG/PNG)";
+    };
+    tipoSel.addEventListener("change", syncResp);
+    syncResp();
+  }
+
+  // Exportar CSV de la tabla de equipo
+  const btnCsv = document.getElementById("btn-exportar-csv");
+  if (btnCsv) {
+    btnCsv.addEventListener("click", function () {
+      const rows = Array.from(document.querySelectorAll("#tabla-equipo tr"))
+        .map(tr => Array.from(tr.querySelectorAll("th, td")).slice(0, 5)
+          .map(td => `"${td.innerText.replace(/\s+/g, " ").trim().replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+      const blob = new Blob(["\uFEFF" + rows], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "resumen_equipo_sgr.csv";
+      a.click();
+    });
+  }
+
+  // Gráficos Chart.js
+  const raw = document.getElementById("equipo-charts-data");
+  if (!raw || typeof Chart === "undefined") return;
+  const data = JSON.parse(raw.textContent);
+
+  new Chart(document.getElementById("chartEquipoSemaforo"), {
+    type: "bar",
+    data: {
+      labels: data.semaforo_equipo.labels.length ? data.semaforo_equipo.labels : ["Sin datos"],
+      datasets: [{
+        label: "% Cumplimiento",
+        data: data.semaforo_equipo.values.length ? data.semaforo_equipo.values : [0],
+        backgroundColor: data.semaforo_equipo.colors.length ? data.semaforo_equipo.colors : ["#6c757d"],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, max: 120 } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  new Chart(document.getElementById("chartEquipoCarga"), {
+    type: "bar",
+    data: {
+      labels: data.carga_trabajo.labels.length ? data.carga_trabajo.labels : ["Sin datos"],
+      datasets: [
+        { label: "Total registradas", data: data.carga_trabajo.registradas, backgroundColor: "#6c757d", borderRadius: 4 },
+        { label: "Aprobadas válidas", data: data.carga_trabajo.validas, backgroundColor: "#198754", borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  new Chart(document.getElementById("chartEquipoTendencia"), {
+    type: "line",
+    data: {
+      labels: data.tendencia.labels,
+      datasets: [
+        { label: "Registradas", data: data.tendencia.registradas, borderColor: "#0d6efd", tension: 0.3 },
+        { label: "Aprobadas válidas", data: data.tendencia.aprobadas, borderColor: "#ad0007", backgroundColor: "rgba(173,0,7,0.1)", fill: true, tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  new Chart(document.getElementById("chartEquipoCompromisos"), {
+    type: "doughnut",
+    data: {
+      labels: data.compromisos.labels,
+      datasets: [{
+        data: data.compromisos.values,
+        backgroundColor: ["#ffc107", "#0d6efd", "#198754", "#dc3545"]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+});
+</script>
 {% endblock %}
