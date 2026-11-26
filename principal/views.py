@@ -1129,6 +1129,7 @@ def administracion(request):
         {"slug": "hitos", "nombre": "Hitos Territoriales", "desc": "Hitos comprometidos y sus responsables", "total": Hito.objects.count()},
         {"slug": "tipos-atencion", "nombre": "Tipos de Atención", "desc": "Categorías principales (Territorial / Social)", "total": TipoAtencion.objects.count()},
         {"slug": "subtipos-atencion", "nombre": "Subtipos de Atención", "desc": "Incluye marca de coordinación sin puntaje", "total": SubtipoAtencion.objects.count()},
+        {"slug": "roles", "nombre": "Roles del Sistema", "desc": "Perfiles de autorización y control de acceso", "total": Group.objects.count()},
     ]
 
     return renderizar(

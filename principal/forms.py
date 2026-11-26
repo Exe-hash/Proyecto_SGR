@@ -546,3 +546,27 @@ class AsignacionMetaForm(forms.ModelForm):
                     f"La ponderación acumulada del funcionario en {trimestre.codigo} supera el 100% (actual: {suma_actual}%, disponible: {disponible}%).",
                 )
         return cleaned
+
+ROLES_BASE_SISTEMA = {"Funcionario", "Supervisor", "Administrador"}
+
+
+class RolForm(forms.ModelForm):
+    class Meta:
+        model = Group
+        fields = ["name"]
+        labels = {"name": "Nombre del rol"}
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ej: Auditor / Delegado"}),
+        }
+
+    def clean_name(self):
+        nombre = (self.cleaned_data.get("name") or "").strip()
+        if not nombre:
+            raise forms.ValidationError("El nombre del rol es obligatorio.")
+        if self.instance.pk and self.instance.name in ROLES_BASE_SISTEMA and nombre != self.instance.name:
+            raise forms.ValidationError(
+                f"El rol base '{self.instance.name}' no puede renombrarse porque controla permisos críticos del sistema."
+            )
+        if Group.objects.filter(name__iexact=nombre).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("Ya existe un rol registrado con ese nombre.")
+        return nombre
