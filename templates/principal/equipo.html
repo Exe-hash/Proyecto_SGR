@@ -36,7 +36,7 @@
     </div>
   </div>
 
-  <!-- Tarjetas KPI -->
+
   <div class="row g-4 mb-4">
     <div class="col-md-3">
       <div class="card shadow-sm border-0 rounded-4 h-100 p-4">
@@ -92,7 +92,7 @@
     </div>
   </div>
 
-  <!-- 4 Gráficos del Dashboard de Equipo -->
+
   <div class="row g-4 mb-4">
     <div class="col-lg-6">
       <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
@@ -120,7 +120,7 @@
     </div>
   </div>
 
-  <!-- Tabla de Funcionarios -->
+
   <div class="card shadow-sm border-0 rounded-4 mb-4">
     <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center border-bottom gap-2">
       <h5 class="mb-0 fw-bold">Detalle por Funcionario <span class="text-muted fw-normal fs-6">({% now "d M Y" %})</span></h5>
@@ -191,7 +191,7 @@
     </div>
   </div>
 
-  <!-- Historial reciente de Ausencias y Ajustes -->
+
   <div class="row g-4">
     <div class="col-lg-6">
       <div class="card shadow-sm border-0 rounded-4 p-3 h-100">
@@ -234,7 +234,7 @@
   </div>
 </div>
 
-<!-- Modal Registrar Felicitación / Reclamo -->
+
 <div class="modal fade" id="modalAjuste" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow rounded-4">
@@ -295,7 +295,7 @@
   </div>
 </div>
 
-<!-- Modal Informar Ausencia -->
+
 <div class="modal fade" id="modalAusencia" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow rounded-4">
@@ -366,7 +366,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  // Alternar obligatoriedad visual del respaldo según tipo
+
   const tipoSel = document.getElementById("ajuste-tipo");
   const respInput = document.getElementById("ajuste-respaldo-input");
   const respLabel = document.getElementById("ajuste-respaldo-label");
@@ -382,7 +382,7 @@ document.addEventListener("DOMContentLoaded", function () {
     syncResp();
   }
 
-  // Exportar CSV de la tabla de equipo
+
   const btnCsv = document.getElementById("btn-exportar-csv");
   if (btnCsv) {
     btnCsv.addEventListener("click", function () {
@@ -398,7 +398,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Gráficos Chart.js
+
   const raw = document.getElementById("equipo-charts-data");
   if (!raw || typeof Chart === "undefined") return;
   const data = JSON.parse(raw.textContent);

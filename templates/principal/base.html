@@ -99,6 +99,13 @@
       </a>
       {% endif %}
 
+      {% if puede_ver_equipo or puede_administrar %}
+      <a href="{% url 'principal:organizaciones_lista' %}" class="nav-link {% if pagina == 'organizaciones' %}active{% endif %}">
+        <svg class="icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+        Organizaciones / JJVV
+      </a>
+      {% endif %}
+
       {% if es_area_social or puede_ver_equipo %}
       <a href="{% url 'principal:area_social' %}" class="nav-link {% if pagina == 'area_social' %}active{% endif %}">
         <svg class="icon" aria-hidden="true"><use href="#icon-file"></use></svg>

@@ -1,0 +1,80 @@
+{% extends 'principal/base.html' %}
+{% block title %}{{ titulo }} | SGR{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0" style="max-width: 920px;">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0 h3 fw-bold">{{ titulo }}</h1>
+    <a href="{% url 'principal:organizaciones_lista' %}" class="btn btn-outline-secondary btn-sm">← Volver al listado</a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-4 p-4">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger small">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label small fw-bold">Organización *</label>
+          {{ form.nombre }}
+          {% if form.nombre.errors %}<div class="text-danger small mt-1">{{ form.nombre.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Tipo de organización *</label>
+          {{ form.tipo }}
+          {% if form.tipo.errors %}<div class="text-danger small mt-1">{{ form.tipo.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-md-5">
+          <label class="form-label small fw-bold">Territorio / Delegación *</label>
+          {{ form.territorio }}
+          {% if form.territorio.errors %}<div class="text-danger small mt-1">{{ form.territorio.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small fw-bold">Domicilio legal</label>
+          {{ form.direccion }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-bold">Socios activos</label>
+          {{ form.socios_activos }}
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Fecha constitución</label>
+          {{ form.fecha_constitucion }}
+          {% if form.fecha_constitucion.errors %}<div class="text-danger small mt-1">{{ form.fecha_constitucion.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Nº Registro P.J.</label>
+          {{ form.personalidad_juridica }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Fecha inscripción en registro</label>
+          {{ form.fecha_inscripcion_registro }}
+          {% if form.fecha_inscripcion_registro.errors %}<div class="text-danger small mt-1">{{ form.fecha_inscripcion_registro.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Registro Directorio Nº</label>
+          {{ form.registro_directorio_numero }}
+        </div>
+
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.activa }}
+            <label class="form-check-label small fw-bold">Organización activa</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+        <a href="{% url 'principal:organizaciones_lista' %}" class="btn btn-light border">Cancelar</a>
+        <button type="submit" class="btn btn-danger fw-bold px-4" style="background-color: #ad0007;">
+          {% if es_edicion %}Guardar Cambios{% else %}Registrar Organización{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -21,8 +21,10 @@ from .models import (
     GestionSocial,
     Meta,
     Observacion,
+    Dirigencia,
+    JuntaVecinos,
 )
-
+from .models import Cargo, CatalogoMeta, TipoOrganizacion
 from .periodos import contexto_periodo_actual
 
 from django.contrib.auth import update_session_auth_hash
@@ -50,6 +52,8 @@ from .reglas import (
     validar_limite_diario,
     validar_registro_editable,
     validar_semana_abierta,
+    fecha_minima_semana_abierta,
+    vincular_vecino_a_organizacion,
 )
 
 from django.urls import reverse, reverse_lazy
@@ -244,7 +248,7 @@ def _validar_archivo_subido(archivo, extensiones_permitidas):
 @transaction.atomic
 def actividades(request):
     hoy = timezone.localdate()
-    lunes_semana = inicio_semana_actual(hoy)
+    lunes_semana = fecha_minima_semana_abierta(hoy)
     perfil = getattr(request.user, "perfil", None)
     trimestre_actual = obtener_trimestre_para_fecha(hoy)
 
@@ -305,6 +309,7 @@ def actividades(request):
             telefono=telefono,
             territorio=sector_obj,
         )
+        vincular_vecino_a_organizacion(vecino_obj, request.POST.get("junta_vecinos_id"))
         if vecino_obj:
             if not contacto:
                 contacto = vecino_obj.nombre_completo
@@ -430,6 +435,7 @@ def actividades(request):
             "limite_diario": LIMITE_DIARIO_ACTIVIDADES,
             "fecha_minima_semana": lunes_semana,
             "delegacion_actual_id": perfil.delegacion_id if perfil else None,
+            "organizaciones_activas": JuntaVecinos.objects.filter(activa=True).select_related("territorio").order_by("nombre"),
         },
     )
 
@@ -471,11 +477,11 @@ def agenda(request):
             codigo=codigo_recibido,
         )
 
-        # Control de delegación
+
         if delegacion_usuario and compromiso.territorio_id != delegacion_usuario.id:
             raise PermissionDenied("No tienes permiso para acceder a compromisos de otra delegación.")
 
-        # Control de propiedad del registro (solo propios para Funcionario)
+
         es_dueno = (
             compromiso.responsable_id == request.user.id
             or compromiso.creado_por_id == request.user.id
@@ -483,7 +489,7 @@ def agenda(request):
         if not (es_dueno or es_supervisor):
             raise PermissionDenied("Solo puedes modificar tus propios registros en el Tubo.")
 
-        # Inmutabilidad de registros aprobados / completados
+
         if _compromiso_esta_bloqueado(compromiso):
             messages.error(
                 request,
@@ -633,6 +639,7 @@ def agenda(request):
             "filtro_area": filtro_area,
             "filtro_sector": filtro_sector,
             "filtro_deleg": filtro_deleg,
+            "organizaciones_activas": JuntaVecinos.objects.filter(activa=True).select_related("territorio").order_by("nombre"),
         },
     )
 
@@ -667,6 +674,7 @@ def crear_carta(request):
     rut_norm = normalizar_rut(rut_raw) if rut_raw else ""
     telefono = (request.POST.get("telefono") or "").strip()
     vecino_obj = obtener_o_actualizar_vecino(rut_norm, remitente, telefono) if rut_norm else None
+    vincular_vecino_a_organizacion(vecino_obj, request.POST.get("junta_vecinos_id"))
 
     responsable_id = (request.POST.get("responsable_id") or "").strip()
     responsable = (
@@ -1075,43 +1083,69 @@ def verificacion(request):
 @requiere_roles("Administrador")
 def administracion(request):
     if request.method == "POST":
-        
         if "crear_meta" in request.POST:
             Meta.objects.create(
-                nombre=request.POST.get("nombre"),
+                nombre=(request.POST.get("nombre") or "").strip(),
                 valor_objetivo=request.POST.get("valor_objetivo"),
-                ponderacion=request.POST.get("ponderacion")
+                ponderacion=request.POST.get("ponderacion"),
             )
-        
-
+            messages.success(request, "Meta creada correctamente.")
         elif "editar_meta" in request.POST:
-            meta_id = request.POST.get("meta_id")
-            meta = Meta.objects.get(id=meta_id)
-            meta.nombre = request.POST.get("nombre")
+            meta = get_object_or_404(Meta, id=request.POST.get("meta_id"))
+            meta.nombre = (request.POST.get("nombre") or "").strip()
             meta.valor_objetivo = request.POST.get("valor_objetivo")
             meta.ponderacion = request.POST.get("ponderacion")
             meta.save()
-            
-        
+            messages.success(request, "Meta actualizada correctamente.")
         elif "eliminar_meta" in request.POST:
-            meta_id = request.POST.get("meta_id")
-            Meta.objects.filter(id=meta_id).delete()
-
+            Meta.objects.filter(id=request.POST.get("meta_id")).delete()
+            messages.success(request, "Meta eliminada correctamente.")
         return redirect("principal:administracion")
-            
-    
-    metas_reales = Meta.objects.all().order_by('-id')
-    
-    
-    usuarios = User.objects.all().select_related('perfil')
-    
+
+    tab_activo = request.GET.get("tab", "usuarios")
+    if tab_activo not in ("usuarios", "metas", "catalogos", "periodos"):
+        tab_activo = "usuarios"
+
+    usuarios = (
+        User.objects.select_related("perfil__delegacion", "perfil__cargo")
+        .prefetch_related("groups")
+        .all()
+        .order_by("-is_active", "first_name", "username")
+    )
+    cargos = Cargo.objects.all().order_by("nombre")
+    catalogo_metas = CatalogoMeta.objects.select_related("cargo_sugerido").all().order_by("codigo")
+    asignaciones_meta = (
+        AsignacionMeta.objects.select_related("funcionario", "trimestre", "catalogo_meta")
+        .all()
+        .order_by("-trimestre__fecha_inicio", "funcionario__first_name", "catalogo_meta__codigo")
+    )
+    trimestres = Trimestre.objects.all().order_by("-fecha_inicio")
+    metas_reales = Meta.objects.all().order_by("-id")
+
+    tarjetas_catalogos = [
+        {"slug": "delegaciones", "nombre": "Delegaciones Municipales", "desc": "Unidades territoriales de la comuna", "total": Delegacion.objects.count()},
+        {"slug": "territorios", "nombre": "Territorios / Sectores", "desc": "Sectores asociados a cada delegación", "total": Territorio.objects.count()},
+        {"slug": "vecinos", "nombre": "Vecinos", "desc": "Ciudadanos, RUT y datos de contacto", "total": Vecino.objects.count()},
+        {"slug": "hitos", "nombre": "Hitos Territoriales", "desc": "Hitos comprometidos y sus responsables", "total": Hito.objects.count()},
+        {"slug": "tipos-atencion", "nombre": "Tipos de Atención", "desc": "Categorías principales (Territorial / Social)", "total": TipoAtencion.objects.count()},
+        {"slug": "subtipos-atencion", "nombre": "Subtipos de Atención", "desc": "Incluye marca de coordinación sin puntaje", "total": SubtipoAtencion.objects.count()},
+    ]
+
     return renderizar(
         request,
         "principal/administracion.html",
         {
             "pagina": "administracion",
-            "metas_reales": metas_reales,
+            "tab_activo": tab_activo,
             "usuarios": usuarios,
+            "cargos": cargos,
+            "catalogo_metas": catalogo_metas,
+            "asignaciones_meta": asignaciones_meta,
+            "trimestres": trimestres,
+            "metas_reales": metas_reales,
+            "tarjetas_catalogos": tarjetas_catalogos,
+            "total_organizaciones": JuntaVecinos.objects.count(),
+            "total_tipos_org": TipoOrganizacion.objects.count(),
         },
     )
 
@@ -1319,7 +1353,8 @@ def area_social(request):
             "subtipos_sociales": subtipos_sociales,
             "actividades_hoy": contar_actividades_del_dia(request.user, hoy),
             "limite_diario": LIMITE_DIARIO_ACTIVIDADES,
-            "fecha_minima_semana": inicio_semana_actual(hoy),
+            "fecha_minima_semana": fecha_minima_semana_abierta(hoy),
+            "organizaciones_activas": JuntaVecinos.objects.filter(activa=True).select_related("territorio").order_by("nombre"),
         },
     )
 
@@ -1354,6 +1389,7 @@ def crear_caso_social(request):
 
         perfil = getattr(request.user, "perfil", None)
         vecino_obj = obtener_o_actualizar_vecino(rut_norm, nombre, telefono)
+        vincular_vecino_a_organizacion(vecino_obj, request.POST.get("junta_vecinos_id"))
 
         caso, creado = CasoSocial.objects.get_or_create(
             rut=rut_norm,
@@ -1626,23 +1662,36 @@ def descargar_respaldo_ajuste(request, ajuste_id):
 
 @login_required
 def api_buscar_vecino(request):
-    """Endpoint para autocompletar nombre y teléfono cuando el RUT ya existe en BD."""
+    """Autocompleta nombre, teléfono y organización vigente cuando el RUT ya existe en BD."""
     rut = (request.GET.get("rut") or "").strip()
     if not rut:
         return JsonResponse({"encontrado": False})
 
-    rut_limpio = rut.replace(".", "").upper()
-    vecino = Vecino.objects.filter(Q(rut__iexact=rut) | Q(rut__iexact=rut_limpio)).first()
+    rut_norm = normalizar_rut(rut)
+    rut_limpio = rut_norm.replace(".", "").upper()
+    vecino = Vecino.objects.filter(
+        Q(rut__iexact=rut) | Q(rut__iexact=rut_norm) | Q(rut__iexact=rut_limpio)
+    ).first()
     if vecino:
+        dir_vigente = (
+            Dirigencia.objects.filter(vecino=vecino, vigente=True, junta_vecinos__activa=True)
+            .select_related("junta_vecinos")
+            .order_by("-fecha_inicio")
+            .first()
+        )
         return JsonResponse({
             "encontrado": True,
             "rut": vecino.rut,
             "nombre": vecino.nombre_completo,
             "telefono": vecino.telefono,
             "direccion": vecino.direccion,
+            "junta_vecinos_id": dir_vigente.junta_vecinos_id if dir_vigente else "",
+            "junta_vecinos_nombre": dir_vigente.junta_vecinos.nombre if dir_vigente else "",
         })
 
-    caso = CasoSocial.objects.filter(Q(rut__iexact=rut) | Q(rut__iexact=rut_limpio)).first()
+    caso = CasoSocial.objects.filter(
+        Q(rut__iexact=rut) | Q(rut__iexact=rut_norm) | Q(rut__iexact=rut_limpio)
+    ).first()
     if caso:
         return JsonResponse({
             "encontrado": True,
@@ -1650,6 +1699,8 @@ def api_buscar_vecino(request):
             "nombre": caso.usuario_nombre,
             "telefono": caso.telefono or "",
             "direccion": "",
+            "junta_vecinos_id": "",
+            "junta_vecinos_nombre": "",
         })
 
     return JsonResponse({"encontrado": False})
@@ -1658,7 +1709,7 @@ def api_buscar_vecino(request):
 def asignar_tareas(request):
     hoy = timezone.localdate()
 
-    # --- CREAR O EDITAR TAREA (POST) ---
+
     if request.method == "POST":
         accion = request.POST.get("accion", "crear")
         funcionario_id = request.POST.get("funcionario_id")
@@ -1853,7 +1904,7 @@ def registrar_ajuste_desempeno(request):
 
     funcionario = get_object_or_404(User, pk=int(funcionario_id), is_active=True)
 
-    # Control de delegación para supervisores
+
     es_admin = request.user.is_superuser or usuario_tiene_rol(request.user, "Administrador")
     if not es_admin:
         p_sup = getattr(request.user, "perfil", None)
@@ -1861,7 +1912,7 @@ def registrar_ajuste_desempeno(request):
         if p_sup and p_fun and p_sup.delegacion_id != p_fun.delegacion_id:
             raise PermissionDenied("Solo puedes registrar ajustes a funcionarios de tu delegación.")
 
-    # Regla del cliente: felicitaciones solo válidas con respaldo formal del delegado
+
     if tipo == "Felicitación" and not archivo:
         messages.error(
             request,

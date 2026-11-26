@@ -131,18 +131,35 @@ class Vecino(models.Model):
         return bool(self.nombre_completo.strip() and self.telefono.strip())
 
 
-class JuntaVecinos(models.Model):
-    TIPO_CHOICES = [
-        ("Junta de Vecinos", "Junta de Vecinos"),
-        ("Club Adulto Mayor", "Club Adulto Mayor"),
-        ("Organización Deportiva", "Organización Deportiva"),
-        ("Centro Cultural / Juvenil / Madres", "Centro Cultural / Juvenil / Madres"),
-        ("Comité de Vecinos / Seguridad", "Comité de Vecinos / Seguridad"),
-        ("Organización Funcional", "Organización Funcional"),
-    ]
+class TipoOrganizacion(models.Model):
+    nombre = models.CharField(max_length=80, unique=True, verbose_name="Tipo de organización")
+    descripcion = models.CharField(max_length=255, blank=True, default="", verbose_name="Descripción")
+    activo = models.BooleanField(default=True)
 
+    class Meta:
+        verbose_name = "tipo de organización"
+        verbose_name_plural = "tipos de organización"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class JuntaVecinos(models.Model):
     nombre = models.CharField(max_length=190, db_index=True, verbose_name="Organización")
-    tipo_organizacion = models.CharField(max_length=60, choices=TIPO_CHOICES, default="Organización Funcional")
+    tipo = models.ForeignKey(
+        TipoOrganizacion,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="organizaciones",
+        verbose_name="Tipo de organización",
+    )
+    tipo_organizacion = models.CharField(
+        max_length=80,
+        blank=True,
+        default="Organización Comunitaria Funcional",
+    )
     territorio = models.ForeignKey(
         Territorio,
         on_delete=models.PROTECT,
@@ -182,6 +199,15 @@ class JuntaVecinos(models.Model):
                 name="uq_jjvv_por_territorio",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        if self.tipo:
+            self.tipo_organizacion = self.tipo.nombre
+        super().save(*args, **kwargs)
+
+    @property
+    def nombre_tipo(self):
+        return self.tipo.nombre if self.tipo else self.tipo_organizacion
 
     def __str__(self):
         return f"{self.nombre} ({self.territorio.nombre})"

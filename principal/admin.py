@@ -13,7 +13,7 @@ class CargoAdmin(admin.ModelAdmin):
     list_display = ("id", "nombre")
     search_fields = ("nombre",)
 
-# --- FUSIÓN DE USER Y PERFILUSUARIO EN EL ADMIN ---
+
 
 class PerfilUsuarioInline(admin.StackedInline):
     model = PerfilUsuario
@@ -21,7 +21,7 @@ class PerfilUsuarioInline(admin.StackedInline):
     verbose_name_plural = 'Perfil Organizacional (Cargo y Delegación)'
     fk_name = 'usuario'
 
-# Desregistramos el modelo User nativo para inyectarle nuestro perfil
+
 admin.site.unregister(User)
 
 @admin.register(User)
@@ -38,6 +38,6 @@ class CustomUserAdmin(UserAdmin):
         return instance.perfil.delegacion.nombre if hasattr(instance, 'perfil') and instance.perfil.delegacion else '-'
     get_delegacion.short_description = 'Delegación'
 
-# Registramos los modelos nuevos
+
 admin.site.register(CasoSocial)
 admin.site.register(GestionSocial)

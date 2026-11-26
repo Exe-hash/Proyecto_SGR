@@ -119,6 +119,18 @@
             <input type="tel" id="actividad-telefono" name="telefono" class="form-control" maxlength="25">
           </div>
         </div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-8">
+            <label class="form-label">Organización / Junta de Vecinos del ciudadano</label>
+            <select id="actividad-junta" name="junta_vecinos_id" class="form-select">
+              <option value="">No pertenece a ninguna organización</option>
+              {% for org in organizaciones_activas %}
+                <option value="{{ org.id }}">{{ org.nombre }} ({{ org.territorio.nombre }})</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Si ingresas RUT y seleccionas una organización, el vecino quedará registrado automáticamente.</small>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -228,6 +240,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (data.telefono) telInput.value = data.telefono;
             rutMsg.textContent = "Vecino encontrado: datos autocompletados.";
             rutMsg.className = "text-success small";
+            const juntaSel = document.getElementById("actividad-junta");
+            if (juntaSel) juntaSel.value = data.junta_vecinos_id || "";
           } else {
             rutMsg.textContent = "Vecino nuevo: se guardará al registrar.";
             rutMsg.className = "text-muted small";

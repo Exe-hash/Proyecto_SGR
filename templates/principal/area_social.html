@@ -82,7 +82,7 @@
   </div>
 </div>
 
-<!-- MODALES DE EXPEDIENTE -->
+
 {% for caso in casos %}
 <div class="modal fade" id="modalExpediente{{ caso.id }}" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
@@ -351,7 +351,7 @@
 </div>
 {% endfor %}
 
-<!-- MODAL: NUEVO CASO SOCIAL -->
+
 <div class="modal fade" id="modalNuevoExpediente" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow rounded-4">
@@ -395,8 +395,18 @@
                   <option value="{{ st.id }}">{{ st }}</option>
                 {% endfor %}
               </select>
+              <div class="col-12">
+              <label class="form-label text-muted small mb-1">Organización / Junta de Vecinos</label>
+              <select id="social-junta" name="junta_vecinos_id" class="form-select">
+                <option value="">No pertenece a ninguna organización</option>
+                {% for org in organizaciones_activas %}
+                  <option value="{{ org.id }}">{{ org.nombre }} ({{ org.territorio.nombre }})</option>
+                {% endfor %}
+              </select>
+            </div>
             </div>
           </div>
+          
 
           <div class="d-flex justify-content-between align-items-end border-bottom pb-2 mb-3">
             <h6 class="fw-bold text-secondary mb-0">Primera Gestión (1 de 3)</h6>
@@ -485,6 +495,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (data.telefono) telInput.value = data.telefono;
             rutMsg.textContent = "Ciudadano encontrado: campos autocompletados.";
             rutMsg.className = "text-success small";
+            const juntaSel = document.getElementById("social-junta");
+            if (juntaSel) juntaSel.value = data.junta_vecinos_id || "";
           } else {
             rutMsg.textContent = "Nuevo ciudadano.";
             rutMsg.className = "text-muted small";
