@@ -1,0 +1,202 @@
+{% extends 'principal/base.html' %}
+{% block title %}Organizaciones y Juntas de Vecinos | SGR{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+    <div>
+      <h1 class="mb-1">Organizaciones y Juntas de Vecinos</h1>
+      <p class="text-muted mb-0">Mantenedor territorial de juntas de vecinos, organizaciones comunitarias, tipos y directivas.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-toggle="modal" data-bs-target="#modalTiposOrganizacion">
+        Gestionar Tipos ({{ tipos_organizacion|length }})
+      </button>
+      <a href="{% url 'principal:organizacion_crear' %}" class="btn btn-danger fw-bold" style="background-color: #ad0007;">
+        ＋ Nueva Organización
+      </a>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <form method="get" class="card shadow-sm border-0 rounded-4 p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-bold mb-1">Buscar en tabla</label>
+        <input type="search" class="form-control form-control-sm" placeholder="Nombre, Nº P.J. o domicilio..." data-filtro-tabla="tabla-organizaciones">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-bold mb-1">Territorio</label>
+        <select name="territorio_id" class="form-select form-select-sm">
+          <option value="">Todos los territorios</option>
+          {% for t in territorios_filtro %}
+            <option value="{{ t.id }}" {% if filtro_territorio == t.id|stringformat:"s" %}selected{% endif %}>
+              {{ t.nombre }} ({{ t.delegacion.nombre }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-bold mb-1">Tipo de organización</label>
+        <select name="tipo_id" class="form-select form-select-sm">
+          <option value="">Todos los tipos</option>
+          {% for tipo in tipos_organizacion %}
+            <option value="{{ tipo.id }}" {% if filtro_tipo == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label small fw-bold mb-1">Estado</label>
+        <select name="estado" class="form-select form-select-sm">
+          <option value="activas" {% if filtro_estado == 'activas' %}selected{% endif %}>Activas</option>
+          <option value="inactivas" {% if filtro_estado == 'inactivas' %}selected{% endif %}>Inactivas</option>
+          <option value="todas" {% if filtro_estado == 'todas' %}selected{% endif %}>Todas</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-sm btn-danger fw-bold w-100" style="background-color: #ad0007;">Filtrar</button>
+        <a href="{% url 'principal:organizaciones_lista' %}" class="btn btn-sm btn-light border">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  <!-- Tabla -->
+  <div class="card shadow-sm border-0 rounded-4">
+    <div class="table-responsive">
+      <table id="tabla-organizaciones" class="table table-hover align-middle mb-0 small">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Organización / Domicilio</th>
+            <th>Tipo</th>
+            <th>Territorio</th>
+            <th>P.J. / Dir. Nº</th>
+            <th>Socios</th>
+            <th>Presidente/a vigente</th>
+            <th>Estado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for org in organizaciones %}
+          <tr>
+            <td class="ps-3">
+              <strong>{{ org.nombre }}</strong>
+              {% if org.direccion %}<br><span class="text-muted">{{ org.direccion }}</span>{% endif %}
+            </td>
+            <td><span class="badge bg-light text-dark border">{{ org.nombre_tipo }}</span></td>
+            <td>
+              <strong>{{ org.territorio.nombre }}</strong><br>
+              <span class="text-muted">{{ org.territorio.delegacion.nombre }}</span>
+            </td>
+            <td class="text-nowrap">
+              <div><strong>P.J.:</strong> {{ org.personalidad_juridica|default:"-" }}</div>
+              <div class="text-muted"><strong>Dir.:</strong> {{ org.registro_directorio_numero|default:"-" }}</div>
+            </td>
+            <td class="text-nowrap">
+              <strong>{{ org.socios_activos }}</strong> reg.<br>
+              <span class="text-muted">{{ org.total_registrados_sgr }} en SGR</span>
+            </td>
+            <td>
+              {% if org.presidente_vigente %}
+                <strong>{{ org.presidente_vigente.vecino.nombre_completo }}</strong><br>
+                <span class="text-muted">{{ org.presidente_vigente.vecino.telefono|default:"Sin fono" }}</span>
+              {% else %}
+                <span class="text-muted">Sin asignar</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if org.activa %}
+                <span class="badge bg-success">Activa</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactiva</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3 text-nowrap">
+              <div class="d-inline-flex gap-1">
+                <a href="{% url 'principal:organizacion_directiva' org.id %}" class="btn btn-sm btn-outline-dark">Directiva</a>
+                <a href="{% url 'principal:organizacion_editar' org.id %}" class="btn btn-sm btn-outline-primary">Editar</a>
+                <form method="post" action="{% url 'principal:organizacion_toggle_estado' org.id %}" class="m-0">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm {% if org.activa %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                    {% if org.activa %}Desactivar{% else %}Activar{% endif %}
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center p-5 text-muted">No hay organizaciones registradas para estos filtros.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Gestionar Tipos de Organización (crear dinámicamente) -->
+<div class="modal fade" id="modalTiposOrganizacion" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Tipos de Organización</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="{% url 'principal:tipo_organizacion_crear' %}" class="row g-2 mb-4 pb-3 border-bottom align-items-end">
+          {% csrf_token %}
+          <div class="col-md-5">
+            <label class="form-label small fw-bold">Nuevo tipo *</label>
+            {{ form_tipo.nombre }}
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small fw-bold">Descripción</label>
+            {{ form_tipo.descripcion }}
+          </div>
+          <div class="col-md-2">
+            <input type="hidden" name="activo" value="on">
+            <button type="submit" class="btn btn-danger fw-bold w-100" style="background-color: #ad0007;">＋ Crear</button>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Estado</th>
+                <th class="text-end">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for tipo in tipos_organizacion %}
+              <tr>
+                <td class="fw-bold">{{ tipo.nombre }}</td>
+                <td class="small text-muted">{{ tipo.descripcion|default:"-" }}</td>
+                <td>
+                  {% if tipo.activo %}
+                    <span class="badge bg-success">Activo</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Inactivo</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <form method="post" action="{% url 'principal:tipo_organizacion_toggle' tipo.id %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      {% if tipo.activo %}Desactivar{% else %}Activar{% endif %}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

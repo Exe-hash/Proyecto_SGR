@@ -382,6 +382,15 @@
               <label class="form-label small fw-bold">Fono</label>
               <input type="text" id="carta-fono" name="telefono" class="form-control">
             </div>
+            <div class="col-12">
+              <label class="form-label small fw-bold">Organización / Junta de Vecinos del remitente</label>
+              <select id="carta-junta" name="junta_vecinos_id" class="form-select">
+                <option value="">No pertenece a ninguna organización</option>
+                {% for org in organizaciones_activas %}
+                  <option value="{{ org.id }}">{{ org.nombre }} ({{ org.territorio.nombre }})</option>
+                {% endfor %}
+              </select>
+            </div>
 
             <div class="col-12">
               <label class="form-label small fw-bold">Actividad o Tema *</label>
@@ -675,6 +684,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (data.telefono) document.getElementById("carta-fono").value = data.telefono;
             msg.textContent = "Vecino encontrado: datos autocompletados.";
             msg.className = "text-success small";
+            const juntaSel = document.getElementById("carta-junta");
+            if (juntaSel) juntaSel.value = data.junta_vecinos_id || "";
           } else {
             msg.textContent = "Remitente nuevo.";
             msg.className = "text-muted small";

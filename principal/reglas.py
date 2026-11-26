@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Evidencia, GestionSocial, Trimestre, Vecino
+from .models import Dirigencia, Evidencia, GestionSocial, JuntaVecinos, Trimestre, Vecino
 
 LIMITE_DIARIO_ACTIVIDADES = 7
 
@@ -52,19 +53,27 @@ def inicio_semana_actual(hoy: date | None = None) -> date:
     referencia = hoy or timezone.localdate()
     return referencia - timedelta(days=referencia.weekday())
 
-
-def validar_semana_abierta(fecha_objetivo: date, hoy: date | None = None) -> None:
+def fecha_minima_semana_abierta(hoy: date | None = None) -> date:
     """
-    Impide el ingreso tardío de actividades o gestiones correspondientes
-    a una semana calendario ya cerrada o a un trimestre cerrado.
+    Regla 4: las gestiones de lunes a viernes cierran al terminar el lunes siguiente.
+    - Si hoy es lunes: todavía se permiten fechas desde el lunes de la semana pasada.
+    - Desde el martes en adelante: la semana anterior queda cerrada y rige el lunes actual.
     """
     referencia = hoy or timezone.localdate()
     lunes_actual = inicio_semana_actual(referencia)
+    if referencia.weekday() == 0:  # Lunes
+        return lunes_actual - timedelta(days=7)
+    return lunes_actual
 
-    if fecha_objetivo < lunes_actual:
+def validar_semana_abierta(fecha_objetivo: date, hoy: date | None = None) -> None:
+    """Impide el ingreso tardío de gestiones de una semana o trimestre cerrado."""
+    referencia = hoy or timezone.localdate()
+    fecha_minima = fecha_minima_semana_abierta(referencia)
+
+    if fecha_objetivo < fecha_minima:
         raise ValidationError(
             f"No se permite el ingreso tardío de gestiones de una semana cerrada "
-            f"(solo se aceptan fechas desde el lunes {lunes_actual.strftime('%d/%m/%Y')})."
+            f"(solo se aceptan fechas desde el {fecha_minima.strftime('%d/%m/%Y')})."
         )
 
     trimestre_cerrado = Trimestre.objects.filter(
@@ -77,6 +86,35 @@ def validar_semana_abierta(fecha_objetivo: date, hoy: date | None = None) -> Non
             "La fecha seleccionada corresponde a un trimestre cerrado y no admite nuevos ingresos."
         )
 
+def vincular_vecino_a_organizacion(vecino: Vecino | None, junta_id_raw: str | int | None):
+    """
+    Asocia al vecino a la organización elegida (como Socio vigente si aún no pertenece).
+    Si junta_id_raw viene vacío o '0', equivale a 'No pertenece a ninguna organización'.
+    """
+    if not vecino or not junta_id_raw:
+        return None
+    junta_str = str(junta_id_raw).strip()
+    if not junta_str.isdigit() or int(junta_str) <= 0:
+        return None
+
+    junta = JuntaVecinos.objects.filter(pk=int(junta_str), activa=True).first()
+    if not junta:
+        return None
+
+    ya_pertenece = Dirigencia.objects.filter(
+        vecino=vecino,
+        junta_vecinos=junta,
+        vigente=True,
+    ).exists()
+    if not ya_pertenece:
+        Dirigencia.objects.create(
+            vecino=vecino,
+            junta_vecinos=junta,
+            cargo_dirigencia="Socio",
+            fecha_inicio=timezone.localdate(),
+            vigente=True,
+        )
+    return junta
 
 def contar_actividades_del_dia(
     usuario,

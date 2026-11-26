@@ -1,0 +1,184 @@
+{% extends 'principal/base.html' %}
+{% block title %}Directiva y Socios | {{ org.nombre }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+  <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+    <div>
+      <span class="badge bg-light text-dark border mb-1">{{ org.nombre_tipo }} · {{ org.territorio.nombre }}</span>
+      <h1 class="mb-1 h3 fw-bold">{{ org.nombre }}</h1>
+      <p class="text-muted small mb-0">
+        P.J. Nº {{ org.personalidad_juridica|default:"-" }} · Dir. Nº {{ org.registro_directorio_numero|default:"-" }} · Domicilio: {{ org.direccion|default:"Sin domicilio" }}
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'principal:organizacion_editar' org.id %}" class="btn btn-sm btn-outline-primary">Editar organización</a>
+      <a href="{% url 'principal:organizaciones_lista' %}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Formulario agregar integrante -->
+    <div class="col-lg-4">
+      <div class="card shadow-sm border-0 rounded-4 p-4">
+        <h5 class="fw-bold mb-3">Agregar Dirigente o Socio</h5>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Vecino ya registrado</label>
+            <select name="vecino_id" id="dir-vecino-select" class="form-select form-select-sm">
+              <option value="">-- O ingrésalo abajo por RUT --</option>
+              {% for v in vecinos_disponibles %}
+                <option value="{{ v.id }}">{{ v.nombre_completo }} ({{ v.rut }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="border rounded-3 p-3 bg-light mb-3">
+            <small class="fw-bold text-muted d-block mb-2">Buscar o crear vecino por RUT</small>
+            <div class="mb-2">
+              <label class="form-label small mb-1">RUT</label>
+              <input type="text" name="rut" id="dir-rut" class="form-control form-control-sm input-rut" placeholder="12.345.678-9">
+              <small id="dir-rut-msg" class="text-muted"></small>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small mb-1">Nombre completo</label>
+              <input type="text" name="nombre_completo" id="dir-nombre" class="form-control form-control-sm">
+            </div>
+            <div>
+              <label class="form-label small mb-1">Teléfono</label>
+              <input type="text" name="telefono" id="dir-fono" class="form-control form-control-sm">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Cargo en la organización *</label>
+            <select name="cargo_dirigencia" class="form-select form-select-sm" required>
+              {% for val, label in cargos_dirigencia %}
+                <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-bold">Fecha inicio *</label>
+              <input type="date" name="fecha_inicio" class="form-control form-control-sm" value="{{ hoy|date:'Y-m-d' }}" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-bold">Fecha término</label>
+              <input type="date" name="fecha_termino" class="form-control form-control-sm">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-danger fw-bold w-100" style="background-color: #ad0007;">Guardar integrante</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Vigentes + Historial -->
+    <div class="col-lg-8">
+      <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h5 class="mb-0 fw-bold">Directiva y Socios Vigentes ({{ vigentes|length }})</h5>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Cargo</th>
+                <th>Vecino</th>
+                <th>Teléfono</th>
+                <th>Desde</th>
+                <th class="text-end pe-3">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in vigentes %}
+              <tr>
+                <td class="ps-3">
+                  <span class="badge {% if d.cargo_dirigencia == 'Presidente' %}bg-danger{% elif d.cargo_dirigencia == 'Socio' %}bg-secondary{% else %}bg-primary{% endif %}">
+                    {{ d.get_cargo_dirigencia_display }}
+                  </span>
+                </td>
+                <td>
+                  <strong>{{ d.vecino.nombre_completo }}</strong><br>
+                  <span class="text-muted">{{ d.vecino.rut }}</span>
+                </td>
+                <td>{{ d.vecino.telefono|default:"-" }}</td>
+                <td>{{ d.fecha_inicio|date:"d/m/Y" }}</td>
+                <td class="text-end pe-3">
+                  <form method="post" action="{% url 'principal:dirigencia_finalizar' d.id %}" onsubmit="return confirm('¿Finalizar el cargo vigente y pasarlo al historial?');" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Finalizar cargo</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center p-4 text-muted">Aún no hay dirigentes ni socios registrados en esta organización.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if historial %}
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-header bg-white py-3 border-bottom">
+          <h6 class="mb-0 fw-bold text-muted">Historial de Directivas y Membresías Anteriores ({{ historial|length }})</h6>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 small text-muted">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Cargo</th>
+                <th>Vecino</th>
+                <th>Período</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in historial %}
+              <tr>
+                <td class="ps-3">{{ h.get_cargo_dirigencia_display }}</td>
+                <td>{{ h.vecino.nombre_completo }} ({{ h.vecino.rut }})</td>
+                <td>{{ h.fecha_inicio|date:"d/m/Y" }} — {{ h.fecha_termino|date:"d/m/Y"|default:"Finalizado" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const rutInput = document.getElementById("dir-rut");
+  if (!rutInput) return;
+  rutInput.addEventListener("blur", function () {
+    const rut = this.value.trim();
+    const msg = document.getElementById("dir-rut-msg");
+    if (!rut) { msg.textContent = ""; return; }
+    fetch("{% url 'principal:api_buscar_vecino' %}?rut=" + encodeURIComponent(rut))
+      .then(r => r.json())
+      .then(data => {
+        if (data.encontrado) {
+          document.getElementById("dir-vecino-select").value = "";
+          if (data.nombre) document.getElementById("dir-nombre").value = data.nombre;
+          if (data.telefono) document.getElementById("dir-fono").value = data.telefono;
+          msg.textContent = "Vecino encontrado en base de datos.";
+          msg.className = "text-success small";
+        } else {
+          msg.textContent = "Vecino nuevo: completa su nombre y teléfono.";
+          msg.className = "text-muted small";
+        }
+      })
+      .catch(() => {});
+  });
+});
+</script>
+{% endblock %}
