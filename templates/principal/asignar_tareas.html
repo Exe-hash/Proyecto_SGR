@@ -351,8 +351,9 @@ Variables que debe entregar la vista (pendiente de implementar en views.py):
             </select>
             </div>
             <div class="col-md-6">
-            <label for="editarFecha" class="form-label fw-semibold">Fecha límite <span class="text-danger">*</span></label>
-            <input type="date" id="editarFecha" name="fecha_limite" class="form-control" required>
+              <label for="editarFecha" class="form-label fw-semibold">Fecha límite (fija)</label>
+              <input type="date" id="editarFecha" class="form-control bg-light" disabled>
+              <small class="text-muted">El plazo original no puede modificarse tras crear la tarea.</small>
             </div>
         </div>
         </div>

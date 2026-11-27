@@ -105,7 +105,7 @@ def contexto_usuario(request, **contexto):
     contexto.update(
         {
             "puede_registrar_actividades": usuario_tiene_rol(request.user, "Funcionario"),
-            "puede_ver_agenda": usuario_tiene_rol(request.user, "Funcionario", "Supervisor"),
+            "puede_ver_agenda": usuario_tiene_rol(request.user, "Funcionario", "Supervisor", "Administrador"),
             "es_area_social": True if perfil and perfil.cargo and 'social' in perfil.cargo.nombre.lower() else False,
             "puede_ver_equipo": usuario_tiene_rol(request.user, "Supervisor"),
             "puede_verificar_evidencias": usuario_tiene_rol(request.user, "Supervisor"),
@@ -451,12 +451,14 @@ def _compromiso_esta_bloqueado(compromiso):
     return bool(ev_origen and es_registro_aprobado(ev_origen.estado))
 
 
-@requiere_roles("Funcionario", "Supervisor")
+@requiere_roles("Funcionario", "Supervisor", "Administrador")
 @transaction.atomic
 def agenda(request):
     perfil = getattr(request.user, "perfil", None)
     es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
-    delegacion_usuario = perfil.delegacion if (perfil and not request.user.is_superuser) else None
+    es_admin = usuario_tiene_rol(request.user, "Administrador") or request.user.is_superuser
+    puede_resolver_tubo = es_supervisor or es_admin
+    delegacion_usuario = perfil.delegacion if (perfil and not es_admin) else None
 
 
     if request.method == "POST":
@@ -486,8 +488,13 @@ def agenda(request):
             compromiso.responsable_id == request.user.id
             or compromiso.creado_por_id == request.user.id
         )
-        if not (es_dueno or es_supervisor):
+        if not (es_dueno or puede_resolver_tubo):
             raise PermissionDenied("Solo puedes modificar tus propios registros en el Tubo.")
+
+        if not puede_resolver_tubo and nuevo_estado not in {"Pendiente", "En proceso"}:
+         raise PermissionDenied(
+             "Solo un Supervisor o Administrador puede marcar un compromiso como Completado o Rechazado."
+         )
 
 
         if _compromiso_esta_bloqueado(compromiso):
@@ -580,7 +587,7 @@ def agenda(request):
         es_dueno = c.responsable_id == request.user.id or c.creado_por_id == request.user.id
         c.esta_bloqueado_ui = bloqueado
         c.es_dueno_ui = es_dueno
-        c.puede_editar_ui = (not bloqueado) and (es_dueno or es_supervisor)
+        c.puede_editar_ui = (not bloqueado) and (es_dueno or puede_resolver_tubo)
         compromisos_reales.append(c)
 
 
@@ -606,7 +613,7 @@ def agenda(request):
     for carta in cartas_lista:
         es_dueno_carta = carta.responsable_id == request.user.id or carta.creado_por_id == request.user.id
         carta.es_dueno_ui = es_dueno_carta
-        carta.puede_editar_ui = (not carta.esta_bloqueada) and (es_dueno_carta or es_supervisor)
+        carta.puede_editar_ui = (not carta.esta_bloqueada) and (es_dueno_carta or puede_resolver_tubo)
 
     funcionarios_qs = User.objects.filter(is_active=True).select_related("perfil__delegacion").order_by("first_name", "username")
     if delegacion_usuario:
@@ -630,8 +637,8 @@ def agenda(request):
             "funcionarios_filtro": funcionarios_qs,
             "territorios_filtro": territorios_qs,
             "delegaciones_filtro": Delegacion.objects.filter(activa=True),
-            "es_superusuario": request.user.is_superuser,
-            "es_supervisor": es_supervisor,
+            "es_superusuario": es_admin,
+            "es_supervisor": puede_resolver_tubo,
             "fecha_desde": fecha_desde,
             "fecha_hasta": fecha_hasta,
             "filtro_func": filtro_func,
@@ -639,12 +646,13 @@ def agenda(request):
             "filtro_area": filtro_area,
             "filtro_sector": filtro_sector,
             "filtro_deleg": filtro_deleg,
+            "puede_resolver_tubo": puede_resolver_tubo,
             "organizaciones_activas": JuntaVecinos.objects.filter(activa=True).select_related("territorio").order_by("nombre"),
         },
     )
 
 
-@requiere_roles("Funcionario", "Supervisor")
+@requiere_roles("Funcionario", "Supervisor", "Administrador")
 @transaction.atomic
 def crear_carta(request):
     """Registra una nueva carta en el Tubo de Cartas de Oficina de Partes."""
@@ -653,9 +661,11 @@ def crear_carta(request):
 
     hoy = timezone.localdate()
     perfil = getattr(request.user, "perfil", None)
+    es_admin = usuario_tiene_rol(request.user, "Administrador") or request.user.is_superuser
+    puede_resolver = usuario_tiene_rol(request.user, "Supervisor") or es_admin
     delegacion_id = (request.POST.get("delegacion_id") or "").strip()
 
-    if request.user.is_superuser and delegacion_id.isdigit():
+    if es_admin and delegacion_id.isdigit():
         delegacion = Delegacion.objects.filter(pk=int(delegacion_id)).first()
     else:
         delegacion = perfil.delegacion if perfil else Delegacion.objects.first()
@@ -686,7 +696,7 @@ def crear_carta(request):
     estado = (request.POST.get("estado") or "En proceso").strip()
     if estado not in {"En proceso", "Aprobada", "Finalizada", "No aplica"}:
         estado = "En proceso"
-    if not usuario_tiene_rol(request.user, "Supervisor") and estado in ("Aprobada", "Finalizada"):
+    if not puede_resolver and estado in ("Aprobada", "Finalizada"):
         estado = "En proceso"
 
     carta = CartaOficinaPartes.objects.create(
@@ -714,7 +724,7 @@ def crear_carta(request):
     return redirect(f"{reverse('principal:agenda')}?tab=cartas")
 
 
-@requiere_roles("Funcionario", "Supervisor")
+@requiere_roles("Funcionario", "Supervisor", "Administrador")
 @transaction.atomic
 def editar_carta(request):
     """Edita una carta existente validando delegación, propiedad e inmutabilidad."""
@@ -725,12 +735,13 @@ def editar_carta(request):
     carta = get_object_or_404(CartaOficinaPartes, pk=carta_id)
 
     perfil = getattr(request.user, "perfil", None)
-    es_supervisor = usuario_tiene_rol(request.user, "Supervisor")
-    if perfil and not request.user.is_superuser and carta.delegacion_id != perfil.delegacion_id:
+    es_admin = usuario_tiene_rol(request.user, "Administrador") or request.user.is_superuser
+    puede_resolver = usuario_tiene_rol(request.user, "Supervisor") or es_admin
+    if perfil and not es_admin and carta.delegacion_id != perfil.delegacion_id:
         raise PermissionDenied("No tienes permiso para modificar cartas de otra delegación.")
 
     es_dueno = carta.responsable_id == request.user.id or carta.creado_por_id == request.user.id
-    if not (es_dueno or es_supervisor):
+    if not (es_dueno or puede_resolver):
         raise PermissionDenied("Solo puedes modificar tus propias cartas en el Tubo.")
 
     if carta.esta_bloqueada:
@@ -740,8 +751,8 @@ def editar_carta(request):
     nuevo_estado = (request.POST.get("estado") or carta.estado).strip()
     if nuevo_estado not in {"En proceso", "Aprobada", "Finalizada", "No aplica"}:
         nuevo_estado = carta.estado
-    if not es_supervisor and nuevo_estado == "Aprobada":
-        messages.error(request, "Solo un Supervisor puede marcar una carta como Aprobada.")
+    if not puede_resolver and nuevo_estado == "Aprobada":
+        messages.error(request, "Solo un Supervisor o Administrador puede marcar una carta como Aprobada.")
         return redirect(f"{reverse('principal:agenda')}?tab=cartas")
 
     carta.numero_carta = (request.POST.get("numero_carta") or "").strip()
@@ -1724,14 +1735,8 @@ def asignar_tareas(request):
         if prioridad not in {"Baja", "Media", "Alta", "Urgente"}:
             prioridad = "Media"
 
-        if not (funcionario_id and titulo and fecha_limite_str):
-            messages.error(request, "Completa el funcionario, el título y la fecha límite.")
-            return redirect("principal:asignar_tareas")
-
-        try:
-            fecha_limite = date.fromisoformat(fecha_limite_str)
-        except ValueError:
-            messages.error(request, "La fecha límite no tiene un formato válido.")
+        if not (funcionario_id and titulo):
+            messages.error(request, "Completa el funcionario y el título de la tarea.")
             return redirect("principal:asignar_tareas")
 
         responsable = get_object_or_404(User, pk=funcionario_id, is_active=True)
@@ -1747,28 +1752,40 @@ def asignar_tareas(request):
         if delegacion is None:
             delegacion = Delegacion.objects.create(nombre="Casa Central")
 
-        dias = (fecha_limite - hoy).days
-        if dias > 0:
-            plazo_txt = f"{dias} días"
-        elif dias == 0:
-            plazo_txt = "Hoy"
-        else:
-            plazo_txt = f"Vencido ({abs(dias)} días)"
-
         if accion == "editar":
             tarea_id = request.POST.get("tarea_id")
             compromiso = get_object_or_404(Compromiso, pk=tarea_id)
+            if _compromiso_esta_bloqueado(compromiso):
+                messages.error(request, f"La tarea {compromiso.codigo} ya está cerrada y no permite modificaciones.")
+                return redirect("principal:asignar_tareas")
+
             compromiso.responsable = responsable
             compromiso.territorio = delegacion
             compromiso.sector = sector
             compromiso.titulo = titulo[:255]
             compromiso.descripcion = descripcion
             compromiso.prioridad = prioridad
-            compromiso.fecha_limite = fecha_limite
-            compromiso.plazo = plazo_txt
+            # fecha_limite y plazo son inmutables tras la creación para todos los roles
             compromiso.save()
-            messages.success(request, f"Tarea {compromiso.codigo} actualizada correctamente.")
+            messages.success(request, f"Tarea {compromiso.codigo} actualizada (la fecha límite original se mantiene fija).")
         else:
+            if not fecha_limite_str:
+                messages.error(request, "Completa la fecha límite para asignar la tarea.")
+                return redirect("principal:asignar_tareas")
+            try:
+                fecha_limite = date.fromisoformat(fecha_limite_str)
+            except ValueError:
+                messages.error(request, "La fecha límite no tiene un formato válido.")
+                return redirect("principal:asignar_tareas")
+
+            dias = (fecha_limite - hoy).days
+            if dias > 0:
+                plazo_txt = f"{dias} días"
+            elif dias == 0:
+                plazo_txt = "Hoy"
+            else:
+                plazo_txt = f"Vencido ({abs(dias)} días)"
+
             codigo = f"TAR-{hoy.strftime('%Y%m')}-{uuid.uuid4().hex[:5].upper()}"
             solicitante = (request.user.get_full_name().strip() or request.user.get_username())[:150]
             Compromiso.objects.create(
