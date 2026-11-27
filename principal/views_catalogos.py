@@ -1,14 +1,17 @@
 from django.contrib import messages
+from django.contrib.auth.models import Group
 from django.db.models.deletion import ProtectedError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 
 from .forms import (
+    ROLES_BASE_SISTEMA,
     AsignacionMetaForm,
     CargoForm,
     CatalogoMetaForm,
     DelegacionForm,
     HitoForm,
+    RolForm,
     SubtipoAtencionForm,
     TerritorioForm,
     TipoAtencionForm,
@@ -28,7 +31,6 @@ from .models import (
     Vecino,
 )
 from .views import renderizar, requiere_roles
-
 
 def _bool_txt(val, si="Sí", no="No"):
     return si if val else no
@@ -195,6 +197,18 @@ CATALOGOS_CONFIG = {
         "toggle_field": None,
         "invertir_toggle": False,
     },
+    "roles": {
+    "titulo": "Roles del Sistema",
+    "singular": "Rol",
+    "tab_volver": "catalogos",
+    "model": Group,
+    "form": RolForm,
+    "select_related": (),
+    "columnas": ["Nombre del Rol", "Usuarios Asignados"],
+    "fila": lambda o: [o.name, str(o.user_set.count())],
+    "toggle_field": None,
+    "invertir_toggle": False,
+},
 }
 
 
@@ -330,6 +344,17 @@ def catalogo_accion(request, slug, pk):
             estado = "activado" if nuevo_valor else "desactivado"
         messages.success(request, f"{cfg['singular']} '{obj}' {estado} correctamente.")
     else:
+        if slug == "roles":
+            if obj.name in ROLES_BASE_SISTEMA:
+                messages.error(request, f"El rol base '{obj.name}' no se puede eliminar.")
+                return redirect("principal:catalogo_lista", slug=slug)
+            if obj.user_set.exists():
+                messages.error(
+                    request,
+                    f"No se puede eliminar el rol '{obj.name}' porque tiene usuarios asignados.",
+                )
+                return redirect("principal:catalogo_lista", slug=slug)
+
         nombre = str(obj)
         try:
             obj.delete()

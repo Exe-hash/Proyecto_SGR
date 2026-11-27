@@ -185,8 +185,12 @@
       <select id="detail-state" name="nuevo_estado">
         <option value="Pendiente">Pendiente</option>
         <option value="En proceso">En proceso</option>
-        <option value="Completado">Completado</option>
-        <option value="Rechazado">Rechazado</option>
+        <option value="Completado" {% if not puede_resolver_tubo %}disabled{% endif %}>
+          Completado{% if not puede_resolver_tubo %} (solo Supervisor){% endif %}
+        </option>
+        <option value="Rechazado" {% if not puede_resolver_tubo %}disabled{% endif %}>
+          Rechazado{% if not puede_resolver_tubo %} (solo Supervisor){% endif %}
+        </option>
       </select>
     </label>
 

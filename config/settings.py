@@ -119,20 +119,39 @@ else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
     DEFAULT_FROM_EMAIL = "no-reply@sgr.laserena.cl"
 
-# --- SEGURIDAD DE SESIONES Y TOKENS ---
+
 LOGIN_URL = "principal:inicio"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas (jornada laboral)
+SESSION_COOKIE_AGE = 60 * 60 * 8  
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 CSRF_COOKIE_SAMESITE = "Lax"
 
-# Expiración estricta de tokens de recuperación de contraseña (1 hora)
+
 PASSWORD_RESET_TIMEOUT = 3600
 
-# Endurecimiento HTTPS (activar con DJANGO_USE_HTTPS=1 cuando haya SSL)
+
 USE_HTTPS = os.environ.get("DJANGO_USE_HTTPS", "0") == "1"
 SESSION_COOKIE_SECURE = USE_HTTPS
 CSRF_COOKIE_SECURE = USE_HTTPS
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+
+USAR_HTTPS = os.environ.get("USAR_HTTPS", "False").strip().lower() == "true"
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas de jornada laboral
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_SECURE = USAR_HTTPS
+
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = USAR_HTTPS
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+
+PASSWORD_RESET_TIMEOUT = 3600
